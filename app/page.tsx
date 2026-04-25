@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { LandingHeader } from "@/components/LandingHeader";
 import { Footer } from "@/components/Footer";
@@ -22,7 +22,7 @@ export default function CohortPage() {
 
   const projectsFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return PROJECTS.filter((p) => {
+    const matched = PROJECTS.filter((p) => {
       if (q) {
         const hay = `${p.name} ${p.desc} ${p.slug}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -35,11 +35,29 @@ export default function CohortPage() {
       if (projFilter === "launch") return p.badge.text === "LAUNCH";
       return true;
     });
+    // featured spots float to the top — that's what we'll sell
+    return [...matched].sort((a, b) => Number(!!b.featured) - Number(!!a.featured));
   }, [query, projFilter]);
+
+  const [streamed, setStreamed] = useState<LogEntry[]>([]);
+
+  useEffect(() => {
+    const delays = [1400, 2900, 4500, 6100, 7800, 9400];
+    const timers = delays.map((delay, i) =>
+      setTimeout(() => {
+        const entry = INCOMING_LOGS[i];
+        if (!entry) return;
+        setStreamed((prev) => [{ ...entry, isNew: true }, ...prev]);
+      }, delay)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const allLogs = useMemo(() => [...streamed, ...LOG_ENTRIES], [streamed]);
 
   const logFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return LOG_ENTRIES.filter((e) => {
+    return allLogs.filter((e) => {
       if (q) {
         const hay = `${e.team} ${e.who} ${e.did}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -47,7 +65,7 @@ export default function CohortPage() {
       if (logFilter === "all") return true;
       return e.type === logFilter;
     });
-  }, [query, logFilter]);
+  }, [query, logFilter, allLogs]);
 
   return (
     <>
@@ -75,7 +93,7 @@ export default function CohortPage() {
           projects={projectsFiltered}
           logs={logFiltered}
           totalProjects={PROJECTS.length}
-          totalLogs={LOG_ENTRIES.length}
+          totalLogs={allLogs.length}
         />
       </main>
       <Footer />
@@ -216,7 +234,7 @@ function FeedSection({
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
           <Tabs tab={tab} onTab={onTab} />
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+            <span className="live-ping relative inline-block h-1.5 w-1.5 rounded-full bg-accent" />
             <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-secondary">
               LIVE
             </span>
@@ -400,6 +418,13 @@ type ProjectCardData = {
   day: string;
   logs: string;
   rating: string;
+  featured?: boolean;
+  featuredNote?: string;
+};
+
+const FEATURED_SLOTS: Record<string, string> = {
+  "hirematch-ai": "trending · 167 logs",
+  dealroom: "$1.2k MRR · revenue",
 };
 
 const PROJECTS: ProjectCardData[] = DATA_PROJECTS.map((p) => ({
@@ -413,6 +438,8 @@ const PROJECTS: ProjectCardData[] = DATA_PROJECTS.map((p) => ({
   day: `Day ${p.status.daysIn}`,
   logs: `${p.entries} logs`,
   rating: p.rating,
+  featured: p.slug in FEATURED_SLOTS,
+  featuredNote: FEATURED_SLOTS[p.slug],
 }));
 
 function ProjectGrid({ items }: { items: ProjectCardData[] }) {
@@ -426,6 +453,51 @@ function ProjectGrid({ items }: { items: ProjectCardData[] }) {
 }
 
 function ProjectCard({ p }: { p: ProjectCardData }) {
+  if (p.featured) {
+    return (
+      <Link
+        href={`/projects/${p.slug}`}
+        className="featured-glow group relative flex flex-col gap-2.5 overflow-hidden rounded-[10px] border border-accent bg-surface-card p-3.5 transition-transform hover:-translate-y-0.5"
+      >
+        <span
+          aria-hidden
+          className="featured-sweep pointer-events-none absolute inset-0 rounded-[10px]"
+        />
+        <header className="relative flex items-center justify-between">
+          <span
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg font-mono text-[11px] font-semibold"
+            style={{ backgroundColor: p.bg, color: p.fg }}
+          >
+            {p.initials}
+          </span>
+          <span className="featured-pulse inline-flex items-center gap-1 rounded-full bg-accent px-2 py-[3px] font-mono text-[9px] font-semibold tracking-[0.1em] text-fg-inverse">
+            <SparkleIcon size={9} />
+            FEATURED
+          </span>
+        </header>
+
+        <h3 className="relative font-sans text-[15px] font-semibold text-fg-primary">
+          {p.name}
+        </h3>
+        <p className="relative text-[12px] leading-[1.4] text-fg-secondary">
+          {p.desc}
+        </p>
+
+        <div className="relative mt-1 flex items-center gap-3.5 border-t border-accent/30 pt-2 font-mono text-[11px] text-fg-secondary">
+          <span>{p.day}</span>
+          <span>{p.logs}</span>
+          <span className="font-semibold text-accent">{p.rating}</span>
+        </div>
+        {p.featuredNote && (
+          <span className="relative inline-flex w-fit items-center gap-1 rounded-full bg-accent/10 px-2 py-[2px] font-mono text-[10px] font-semibold text-accent">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent featured-pulse" />
+            {p.featuredNote}
+          </span>
+        )}
+      </Link>
+    );
+  }
+
   return (
     <Link
       href={`/projects/${p.slug}`}
@@ -466,6 +538,7 @@ function ProjectCard({ p }: { p: ProjectCardData }) {
 /* -------------------------- Activity log -------------------------- */
 
 type LogEntry = {
+  id: string;
   time: string;
   type: "code" | "talk" | "design" | "doc" | "data";
   team: string;
@@ -474,6 +547,7 @@ type LogEntry = {
   whoHandle?: string;
   did: string;
   meta: string;
+  isNew?: boolean;
 };
 
 const TYPE_COLORS: Record<
@@ -488,23 +562,32 @@ const TYPE_COLORS: Record<
 };
 
 const LOG_ENTRIES: LogEntry[] = [
-  { time: "2m", type: "code", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Sasha K.", whoHandle: "sasha-k", did: "pushed 13 commits — match scoring v2 endpoint", meta: "3h · PR #142" },
-  { time: "5m", type: "talk", team: "TeamPulse", teamSlug: "teampulse", who: "Aya S.", whoHandle: "aya-s", did: "finished 5 user interviews — async standup pain validated", meta: "4h · 5 transcripts" },
-  { time: "12m", type: "design", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Lila P.", whoHandle: "lila-p", did: "shipped 4 new screens — onboarding, profile, match, settings", meta: "5h · Figma" },
-  { time: "21m", type: "doc", team: "DealRoom", teamSlug: "dealroom", who: "Sasha K.", whoHandle: "sasha-k", did: "drafted dashboard wireframe — pipeline view, deal stages", meta: "2h · Excalidraw" },
-  { time: "38m", type: "data", team: "TeamPulse", teamSlug: "teampulse", who: "Marcus R.", whoHandle: "marcus-r", did: "migrated DB to Postgres — auth + sessions tables live", meta: "6h · commit a4f81" },
-  { time: "54m", type: "code", team: "SkillStack", teamSlug: "skillstack", who: "Lila P.", whoHandle: "lila-p", did: "validated SkillStack idea with 30 survey responses", meta: "3h · 30 responses" },
-  { time: "1h", type: "talk", team: "QuietHire", teamSlug: "quiethire", who: "Dima J.", whoHandle: "dima-j", did: "posted spec doc — sync engine v1, conflict resolution", meta: "4h · Notion" },
-  { time: "1h", type: "design", team: "DealRoom", teamSlug: "dealroom", who: "Marcus R.", whoHandle: "marcus-r", did: "peer-reviewed teammate's PR — 2 blockers raised, 1 resolved", meta: "45m · review" },
-  { time: "2h", type: "doc", team: "Team #42", teamSlug: "team-42", who: "Anonymous", did: "sent 18 cold emails — 3 demo bookings on the calendar", meta: "2h · external" },
-  { time: "3h", type: "data", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Aya S.", whoHandle: "aya-s", did: "deployed v0.4 to staging — embedding cache hit rate 94%", meta: "5h · deploy log" },
+  { id: "l-1", time: "2m", type: "code", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Sasha K.", whoHandle: "sasha-k", did: "pushed 13 commits — match scoring v2 endpoint", meta: "3h · PR #142" },
+  { id: "l-2", time: "5m", type: "talk", team: "TeamPulse", teamSlug: "teampulse", who: "Aya S.", whoHandle: "aya-s", did: "finished 5 user interviews — async standup pain validated", meta: "4h · 5 transcripts" },
+  { id: "l-3", time: "12m", type: "design", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Lila P.", whoHandle: "lila-p", did: "shipped 4 new screens — onboarding, profile, match, settings", meta: "5h · Figma" },
+  { id: "l-4", time: "21m", type: "doc", team: "DealRoom", teamSlug: "dealroom", who: "Sasha K.", whoHandle: "sasha-k", did: "drafted dashboard wireframe — pipeline view, deal stages", meta: "2h · Excalidraw" },
+  { id: "l-5", time: "38m", type: "data", team: "TeamPulse", teamSlug: "teampulse", who: "Marcus R.", whoHandle: "marcus-r", did: "migrated DB to Postgres — auth + sessions tables live", meta: "6h · commit a4f81" },
+  { id: "l-6", time: "54m", type: "code", team: "SkillStack", teamSlug: "skillstack", who: "Lila P.", whoHandle: "lila-p", did: "validated SkillStack idea with 30 survey responses", meta: "3h · 30 responses" },
+  { id: "l-7", time: "1h", type: "talk", team: "QuietHire", teamSlug: "quiethire", who: "Dima J.", whoHandle: "dima-j", did: "posted spec doc — sync engine v1, conflict resolution", meta: "4h · Notion" },
+  { id: "l-8", time: "1h", type: "design", team: "DealRoom", teamSlug: "dealroom", who: "Marcus R.", whoHandle: "marcus-r", did: "peer-reviewed teammate's PR — 2 blockers raised, 1 resolved", meta: "45m · review" },
+  { id: "l-9", time: "2h", type: "doc", team: "Team #42", teamSlug: "team-42", who: "Anonymous", did: "sent 18 cold emails — 3 demo bookings on the calendar", meta: "2h · external" },
+  { id: "l-10", time: "3h", type: "data", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Aya S.", whoHandle: "aya-s", did: "deployed v0.4 to staging — embedding cache hit rate 94%", meta: "5h · deploy log" },
+];
+
+const INCOMING_LOGS: LogEntry[] = [
+  { id: "in-1", time: "now", type: "code", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Aya S.", whoHandle: "aya-s", did: "merged PR #143 — embedding cache TTL bumped to 12h", meta: "just now · PR #143" },
+  { id: "in-2", time: "8s", type: "talk", team: "QuietHire", teamSlug: "quiethire", who: "Dima J.", whoHandle: "dima-j", did: "kicked off intro call with hiring lead at series-B fintech", meta: "30m · live" },
+  { id: "in-3", time: "22s", type: "design", team: "DealRoom", teamSlug: "dealroom", who: "Marcus R.", whoHandle: "marcus-r", did: "pushed pipeline-view v3 — 7 frames, dark mode parity", meta: "4h · Figma" },
+  { id: "in-4", time: "41s", type: "code", team: "TeamPulse", teamSlug: "teampulse", who: "Lila P.", whoHandle: "lila-p", did: "shipped /pulse endpoint — async digest now ships at 8am UTC", meta: "2h · PR #58" },
+  { id: "in-5", time: "1m", type: "data", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Sasha K.", whoHandle: "sasha-k", did: "annotated 120 more resumes — scoring drift down 11%", meta: "3h · dataset v4" },
+  { id: "in-6", time: "1m", type: "doc", team: "DealRoom", teamSlug: "dealroom", who: "Sasha K.", whoHandle: "sasha-k", did: "wrote week-3 retro — pace solid, two infra blockers logged", meta: "1h · Notion" },
 ];
 
 function ActivityLog({ items }: { items: LogEntry[] }) {
   return (
     <div className="overflow-hidden rounded-[10px] border border-border-base bg-surface-card">
       {items.map((e, i) => (
-        <LogRow key={i} entry={e} last={i === items.length - 1} />
+        <LogRow key={e.id} entry={e} last={i === items.length - 1} />
       ))}
     </div>
   );
@@ -516,7 +599,7 @@ function LogRow({ entry: e, last }: { entry: LogEntry; last: boolean }) {
     <div
       className={`flex items-center gap-3.5 px-4 py-3 sm:px-[18px] ${
         last ? "" : "border-b border-border-base"
-      }`}
+      } ${e.isNew ? "log-drop-in" : ""}`}
     >
       <span className="w-9 text-right font-mono text-[11px] text-fg-muted">
         {e.time}
@@ -600,6 +683,14 @@ function FeedFooter({
 }
 
 /* -------------------------- Icons -------------------------- */
+
+function SparkleIcon({ size = 10 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 2 13.6 8.4 20 10l-6.4 1.6L12 18l-1.6-6.4L4 10l6.4-1.6Z" />
+    </svg>
+  );
+}
 
 function SearchIcon({ size = 16, color = "currentColor" }: { size?: number; color?: string }) {
   return (

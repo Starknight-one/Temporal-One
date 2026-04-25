@@ -1,95 +1,108 @@
 # Temporal One
 
-A platform where unemployed people find each other, form teams, and build projects together.
+A platform where unemployed people find each other, form 5-person teams, and ship 30-day projects together. Every day of work goes into a public log — proof, not promises. Hirers pay to read full logs and see who's actually shipping.
 
-Lost your job? You're not alone. Temporal One connects people in the same situation so they can team up, share skills, and create something real — instead of sitting through the job search alone.
+Lost your job? You're not alone. Temporal One pairs you with 4 strangers in your situation, runs you through a 30-day sprint with daily logs and peer reviews, and turns the whole month into evidence you can show employers.
 
-## What it does
+## What ships today
 
-- **Profiles** — show your skills, experience, and links (GitHub, LinkedIn) so others can find you
-- **Teams** — create or join a team around a shared idea
-- **Projects** — launch projects within teams, track status (idea / active / paused)
-- **Matching** — browse people and teams to find the right fit
+This repo is a **Next.js webapp**. There's no real backend yet — all data is static fixtures, all forms email `starknight@keepstar.one` via SMTP. The site exists to validate the concept and capture interest.
 
-## Tech stack
+### Public site
 
-| Layer     | Tech                              |
-|-----------|-----------------------------------|
-| Backend   | Go 1.25, chi router               |
-| Database  | PostgreSQL 16                     |
-| Auth      | JWT (golang-jwt)                  |
-| Migrations| golang-migrate                    |
-| Frontend  | Pencil (.pen design files)        |
-| Infra     | Docker Compose                    |
+| Route                  | What it is                                                                 |
+|------------------------|----------------------------------------------------------------------------|
+| `/`                    | Feed — featured projects, live activity log with streaming new entries     |
+| `/projects/[slug]`     | Project detail — team, stats, paywalled activity log                       |
+| `/u/[handle]`          | Builder detail — bio, stats, paywalled activity log                        |
+| `/for-hirers`          | Hirer landing — pricing, sample log preview, intro-call CTA                |
+| `/how-it-works`        | The 4-step path + public/paid breakdown                                    |
+| `/apply`               | Single form, build/hire toggle, honeypot, rate-limited                     |
+| `/signin`              | Honest magic-link request — admin replies within 24h                       |
+| `/dashboard`           | Placeholder until cohort #1                                                |
 
-### Architecture
+### Builder admin (`/app/*`)
 
-Hexagonal (ports & adapters):
+Authenticated-builder area shipped as a static mockup (no auth gate yet). Designed in Pencil, mirrors what a builder sees during their 30-day sprint.
+
+| Route             | Screen                                                                      |
+|-------------------|-----------------------------------------------------------------------------|
+| `/app/today`      | Today + My Log — stats, add-entry CTA, today's entries, previous days       |
+| `/app/team`       | Team Feed — sidebar with teammates, lateral feed of their day               |
+| `/app/playbook`   | Playbook — coming-soon empty state with notify CTA                          |
+| `/app/reviews`    | Reviews (Quick) — anonymous peer reviews with completion progress           |
+| `/app/inbox`      | Inbox — warnings, feedback, day-closed notifications                        |
+
+### Money buttons
+
+Every "Unlock — $500", "Subscribe Pro — $200/mo", and "Notify me" opens an interest-capture modal that posts to `/api/interest`. No payment yet — admin gets an email, replies by hand.
+
+## Tech
+
+| Layer    | Tech                                                |
+|----------|-----------------------------------------------------|
+| Framework| Next.js 16 (Turbopack), React 19, TypeScript        |
+| Styling  | Tailwind CSS v4 (light theme, orange accent)        |
+| Fonts    | Newsreader (display), Inter (sans), Geist Mono      |
+| Email    | Nodemailer over SMTP                                |
+| Hosting  | Railway                                             |
+| Designs  | Pencil `.pen` files (live in `~/Downloads/new.pen`) |
+
+### Layout
 
 ```
-cmd/server/main.go          — entrypoint
-internal/domain/             — core types (User, Profile, Team, Project)
-internal/ports/              — interfaces (repositories, services)
-internal/services/           — business logic
-internal/adapters/postgres/  — database layer
-internal/adapters/http/      — REST handlers + router
-internal/adapters/auth/      — JWT provider
+app/
+  page.tsx                 # /  feed homepage (client component)
+  layout.tsx               # root html + fonts
+  globals.css              # tokens + animations (featured-glow, log-drop-in, live-ping)
+  api/
+    apply/route.ts         # /apply submissions → SMTP
+    interest/route.ts      # interest-modal submissions → SMTP
+    auth/magic-link/       # /signin magic-link request → SMTP
+  projects/[slug]/         # SSG over PROJECTS
+  u/[handle]/              # SSG over BUILDERS
+  app/                     # builder admin shell + 5 screens
+  for-hirers/, how-it-works/, apply/, signin/, dashboard/, cohort/
+
+components/
+  LandingHeader.tsx        # public-site pill nav
+  Footer.tsx
+  InterestModal.tsx        # <InterestButton> client component used everywhere money is mentioned
+  SubpageHeader.tsx        # alias for LandingHeader
+
+lib/
+  data.ts                  # PROJECTS, BUILDERS, log fixtures
+  admin-data.ts            # cohort fixtures for /app/*
+  email.ts                 # validators, escapeHtml, SMTP helpers
+  rate-limit.ts            # in-process IP buckets (5 / 10min default)
 ```
-
-## API
-
-### Public
-| Method | Endpoint             | Description       |
-|--------|----------------------|-------------------|
-| POST   | `/api/auth/register` | Create account    |
-| POST   | `/api/auth/login`    | Get JWT token     |
-
-### Protected (Bearer token)
-| Method | Endpoint                   | Description          |
-|--------|----------------------------|----------------------|
-| GET    | `/api/profile`             | My profile           |
-| PUT    | `/api/profile`             | Update my profile    |
-| GET    | `/api/users/{id}/profile`  | View user profile    |
-| POST   | `/api/teams`               | Create team          |
-| GET    | `/api/teams`               | List all teams       |
-| GET    | `/api/teams/my`            | My teams             |
-| GET    | `/api/teams/{id}`          | Team details         |
-| POST   | `/api/teams/{id}/join`     | Join team            |
-| POST   | `/api/teams/{id}/leave`    | Leave team           |
-| POST   | `/api/projects`            | Create project       |
-| GET    | `/api/projects`            | List all projects    |
-| GET    | `/api/projects/{id}`       | Project details      |
-| PUT    | `/api/projects/{id}`       | Update project       |
 
 ## Quick start
 
 ```bash
-# Clone and run
-git clone <repo-url>
-cd temporal-one
-docker compose up --build
-
-# API is at http://localhost:8080
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-### Local development (without Docker)
+### Environment variables
+
+```
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=postmaster@example.com
+SMTP_PASSWORD=...
+APPLY_TO_EMAIL=starknight@keepstar.one
+```
+
+In dev without SMTP set, mail submissions log to the console and the success state still shows.
+
+### Deploy
 
 ```bash
-# 1. Start Postgres (or use your own)
-# 2. Copy env
-cp backend/.env.example backend/.env
-
-# 3. Run
-cd backend
-go run ./cmd/server
+railway up --detach
 ```
 
-## Frontend
-
-Design mockups are in `frontend/pages/` (Pencil .pen format):
-- `login.png` / `register.png` — auth screens
-- `main-dashboard.png` — home feed
-- `profile.png` — user profile
+Railway uses the standard Next.js build/start. Env vars are configured in the Railway project.
 
 ## License
 
