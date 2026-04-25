@@ -1,122 +1,149 @@
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
+import {
+  isEmail,
+  isHttpsUrl,
+  isNonEmptyString,
+  htmlEnvelope,
+  sendEmail,
+} from "@/lib/email";
+import { ipFromRequest, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ApplyPayload = {
-  firstName: string;
-  lastName: string;
+const TRACKS = [
+  "frontend",
+  "backend",
+  "fullstack",
+  "design",
+  "pm",
+  "growth",
+  "other",
+] as const;
+type Track = (typeof TRACKS)[number];
+
+type BuildPayload = {
+  intent: "build";
+  name: string;
   email: string;
-  role: string;
-  years: string;
   linkedin: string;
-  availability: string;
+  track: Track;
+  note?: string;
 };
 
-const MAX_LEN = 200;
+type HirePayload = {
+  intent: "hire";
+  company: string;
+  name: string;
+  email: string;
+  roles: string;
+};
 
-function isNonEmptyString(v: unknown, max = MAX_LEN): v is string {
-  return typeof v === "string" && v.trim().length > 0 && v.length <= max;
-}
+type Payload = BuildPayload | HirePayload;
 
-function isEmail(v: string): boolean {
-  // Intentionally permissive; full RFC compliance is not worthwhile here.
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-}
-
-function parse(body: unknown): ApplyPayload | { error: string } {
-  if (!body || typeof body !== "object") {
-    return { error: "Invalid request body." };
-  }
+function parse(body: unknown): Payload | { error: string } {
+  if (!body || typeof body !== "object") return { error: "Invalid request body." };
   const b = body as Record<string, unknown>;
 
-  for (const key of [
-    "firstName",
-    "lastName",
-    "email",
-    "role",
-    "years",
-    "linkedin",
-    "availability",
-  ] as const) {
-    if (!isNonEmptyString(b[key])) {
-      return { error: `Missing or invalid field: ${key}` };
-    }
+  // Honeypot. Don't surface as an error — just drop silently with success.
+  if (typeof b.website === "string" && b.website.length > 0) {
+    return { error: "__honeypot__" };
   }
 
-  if (!isEmail(b.email as string)) {
-    return { error: "Please enter a valid email address." };
+  const intent = b.intent;
+  if (intent === "build") {
+    if (!isNonEmptyString(b.name, 120)) return { error: "Please enter your name." };
+    if (!isNonEmptyString(b.email, 200) || !isEmail(b.email))
+      return { error: "Please enter a valid email." };
+    if (!isNonEmptyString(b.linkedin, 300) || !isHttpsUrl(b.linkedin))
+      return { error: "LinkedIn URL needs to be a full https:// link." };
+    if (!isNonEmptyString(b.track, 40) || !TRACKS.includes(b.track as Track))
+      return { error: "Pick a track." };
+    return {
+      intent: "build",
+      name: b.name.trim(),
+      email: b.email.trim(),
+      linkedin: b.linkedin.trim(),
+      track: b.track as Track,
+      note: isNonEmptyString(b.note, 500) ? b.note.trim() : undefined,
+    };
   }
 
+  if (intent === "hire") {
+    if (!isNonEmptyString(b.company, 200))
+      return { error: "Please enter your company." };
+    if (!isNonEmptyString(b.name, 120)) return { error: "Please enter your name." };
+    if (!isNonEmptyString(b.email, 200) || !isEmail(b.email))
+      return { error: "Please enter a valid work email." };
+    if (!isNonEmptyString(b.roles, 600))
+      return { error: "Tell us what roles you're trying to fill." };
+    return {
+      intent: "hire",
+      company: b.company.trim(),
+      name: b.name.trim(),
+      email: b.email.trim(),
+      roles: b.roles.trim(),
+    };
+  }
+
+  return { error: "Unknown intent." };
+}
+
+function buildMessage(p: Payload) {
+  if (p.intent === "build") {
+    const rows: [string, string][] = [
+      ["Name", p.name],
+      ["Email", p.email],
+      ["LinkedIn", p.linkedin],
+      ["Track", p.track],
+      ["Note", p.note ?? "—"],
+    ];
+    const text = [
+      `New BUILDER application — Temporal One`,
+      ``,
+      `Name:      ${p.name}`,
+      `Email:     ${p.email}`,
+      `LinkedIn:  ${p.linkedin}`,
+      `Track:     ${p.track}`,
+      `Note:      ${p.note ?? "—"}`,
+    ].join("\n");
+    return {
+      subject: `[Temporal One] Apply (build): ${p.name}`,
+      text,
+      html: htmlEnvelope(`Apply (build): ${p.name}`, rows),
+    };
+  }
+  const rows: [string, string][] = [
+    ["Company", p.company],
+    ["Name", p.name],
+    ["Email", p.email],
+    ["Roles", p.roles],
+  ];
+  const text = [
+    `New HIRER pilot request — Temporal One`,
+    ``,
+    `Company:  ${p.company}`,
+    `Name:     ${p.name}`,
+    `Email:    ${p.email}`,
+    `Roles:    ${p.roles}`,
+  ].join("\n");
   return {
-    firstName: (b.firstName as string).trim(),
-    lastName: (b.lastName as string).trim(),
-    email: (b.email as string).trim(),
-    role: (b.role as string).trim(),
-    years: (b.years as string).trim(),
-    linkedin: (b.linkedin as string).trim(),
-    availability: (b.availability as string).trim(),
+    subject: `[Temporal One] Apply (hire): ${p.company}`,
+    text,
+    html: htmlEnvelope(`Apply (hire): ${p.company}`, rows),
   };
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function buildMessage(p: ApplyPayload) {
-  const fullName = `${p.firstName} ${p.lastName}`;
-  const text = [
-    `New waitlist application — Temporal One`,
-    ``,
-    `Name:          ${fullName}`,
-    `Email:         ${p.email}`,
-    `Role:          ${p.role}`,
-    `Experience:    ${p.years} years`,
-    `LinkedIn:      ${p.linkedin}`,
-    `Availability:  ${p.availability}/week`,
-  ].join("\n");
-
-  const rows: [string, string][] = [
-    ["Name", fullName],
-    ["Email", p.email],
-    ["Role", p.role],
-    ["Experience", `${p.years} years`],
-    ["LinkedIn", p.linkedin],
-    ["Availability", `${p.availability}/week`],
-  ];
-
-  const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0a0a0a; color:#ffffff; padding:32px;">
-      <h2 style="font-size:14px; letter-spacing:3px; text-transform:uppercase; color:#39ff14; margin:0 0 16px;">Temporal One — New Application</h2>
-      <h1 style="margin:0 0 24px; font-size:24px;">${escapeHtml(fullName)}</h1>
-      <table style="border-collapse:collapse; width:100%; max-width:520px;">
-        ${rows
-          .map(
-            ([k, v]) => `
-          <tr>
-            <td style="padding:10px 16px; border-bottom:1px solid #2a2a2a; color:#a1a1aa; font-size:12px; text-transform:uppercase; letter-spacing:1px; width:140px;">${escapeHtml(
-              k,
-            )}</td>
-            <td style="padding:10px 16px; border-bottom:1px solid #2a2a2a; color:#ffffff; font-size:14px;">${escapeHtml(
-              v,
-            )}</td>
-          </tr>`,
-          )
-          .join("")}
-      </table>
-    </div>
-  `;
-
-  return { text, html, subject: `[Temporal One] Waitlist: ${fullName}` };
-}
-
 export async function POST(request: Request) {
+  const ip = ipFromRequest(request);
+  const limit = rateLimit(`apply:${ip}`);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: `Too many requests. Try again in ${limit.retryAfter}s.` },
+      { status: 429, headers: { "retry-after": String(limit.retryAfter) } },
+    );
+  }
+
   let raw: unknown;
   try {
     raw = await request.json();
@@ -126,49 +153,22 @@ export async function POST(request: Request) {
 
   const parsed = parse(raw);
   if ("error" in parsed) {
+    if (parsed.error === "__honeypot__") {
+      return NextResponse.json({ ok: true, delivered: false });
+    }
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, APPLY_TO_EMAIL } =
-    process.env;
-  const to = APPLY_TO_EMAIL ?? "starknight@keepstar.one";
   const message = buildMessage(parsed);
 
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASSWORD) {
-    // In local dev without SMTP configured, log and succeed so the UX can be
-    // exercised end-to-end without leaking credentials.
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(
-        "[apply] SMTP not configured — logging application instead.",
-      );
-      console.log("[apply] To:", to);
-      console.log("[apply] Subject:", message.subject);
-      console.log("[apply] Body:\n" + message.text);
-      return NextResponse.json({ ok: true, delivered: false });
-    }
-    return NextResponse.json(
-      { error: "Email delivery is not configured." },
-      { status: 500 },
-    );
-  }
-
-  const port = Number(SMTP_PORT);
-  const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
-  });
-
   try {
-    await transporter.sendMail({
-      from: `"Temporal One" <${SMTP_USER}>`,
-      to,
+    const { delivered } = await sendEmail({
       replyTo: parsed.email,
       subject: message.subject,
       text: message.text,
       html: message.html,
     });
+    return NextResponse.json({ ok: true, delivered });
   } catch (err) {
     console.error("[apply] Failed to send email:", err);
     return NextResponse.json(
@@ -176,6 +176,4 @@ export async function POST(request: Request) {
       { status: 502 },
     );
   }
-
-  return NextResponse.json({ ok: true, delivered: true });
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LandingHeader } from "@/components/LandingHeader";
 import { Footer } from "@/components/Footer";
+import { InterestButton } from "@/components/InterestModal";
 import {
   PROJECTS,
   type Project,
@@ -11,6 +12,7 @@ import {
   getProject,
   getTeamBuilders,
 } from "@/lib/data";
+import { ActivityLogCard } from "./ActivityLogCard";
 
 export function generateStaticParams() {
   return PROJECTS.map((p) => ({ slug: p.slug }));
@@ -22,10 +24,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const p = getProject(slug);
   if (!p) return { title: "Project — Temporal One" };
-  return {
-    title: `${p.name} — Temporal One`,
-    description: p.longDesc,
-  };
+  return { title: `${p.name} — Temporal One`, description: p.longDesc };
 }
 
 export default async function ProjectDetailPage({ params }: Params) {
@@ -42,14 +41,19 @@ export default async function ProjectDetailPage({ params }: Params) {
         <Hero project={project} />
         <Stats project={project} />
         <TeamCard project={project} team={team} />
-        <ActivityLog project={project} />
+        <SectionWrap className="pb-8">
+          <ActivityLogCard
+            log={project.log}
+            totalEntries={project.entries}
+            slug={project.slug}
+            projectName={project.name}
+          />
+        </SectionWrap>
       </main>
       <Footer />
     </>
   );
 }
-
-/* -------------------------- Crumbs -------------------------- */
 
 function Crumbs({ slug }: { slug: string }) {
   return (
@@ -69,8 +73,6 @@ function Crumbs({ slug }: { slug: string }) {
   );
 }
 
-/* -------------------------- Hero -------------------------- */
-
 function Hero({ project }: { project: Project }) {
   return (
     <section className="px-6 pb-2 pt-5 sm:px-12 md:px-20">
@@ -80,7 +82,7 @@ function Hero({ project }: { project: Project }) {
             <span
               className="flex h-16 w-16 flex-none items-center justify-center rounded-xl border"
               style={{
-                backgroundColor: lighten(project.bg),
+                backgroundColor: project.bg + "AA",
                 borderColor: project.bg,
                 color: project.fg,
               }}
@@ -110,19 +112,21 @@ function Hero({ project }: { project: Project }) {
         </div>
 
         <aside className="flex flex-col gap-2.5 py-2">
-          <button
-            type="button"
+          <InterestButton
+            intent="unlock-project"
+            target={`${project.slug} · ${project.name}`}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-surface-inverse px-5 py-3.5 text-[14px] font-semibold text-fg-inverse hover:opacity-90"
           >
             <LockOpenIcon />
             Unlock full project log — $500
-          </button>
-          <button
-            type="button"
+          </InterestButton>
+          <InterestButton
+            intent="pro-monthly"
+            target={`${project.slug} · ${project.name}`}
             className="inline-flex items-center justify-center rounded-full border-[1.5px] border-black bg-surface-card px-5 py-3.5 text-[14px] font-semibold text-fg-primary hover:bg-surface-card-alt"
           >
             Subscribe Pro · $200/mo
-          </button>
+          </InterestButton>
           <p className="text-center font-mono text-[11px] text-fg-muted">
             Public preview shows the latest 15 entries.
           </p>
@@ -173,8 +177,6 @@ function Tag({ children }: { children: ReactNode }) {
   );
 }
 
-/* -------------------------- Stats -------------------------- */
-
 function Stats({ project }: { project: Project }) {
   const cells = [
     { label: "TEAM", value: `${project.team.length} builders` },
@@ -204,8 +206,6 @@ function Stats({ project }: { project: Project }) {
   );
 }
 
-/* -------------------------- Team -------------------------- */
-
 function TeamCard({
   project,
   team,
@@ -219,7 +219,7 @@ function TeamCard({
       <div className="flex flex-col gap-3.5 rounded-2xl border border-border-base bg-surface-card px-6 py-5">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-fg-primary">
-            {project.name === "Team #42" ? "Team" : `Team`}
+            Team
           </h2>
           <span className="font-mono text-[11px] text-fg-muted">
             {team.length} builders · click any to see profile
@@ -255,194 +255,6 @@ function TeamCard({
   );
 }
 
-/* -------------------------- Activity log -------------------------- */
-
-function ActivityLog({ project }: { project: Project }) {
-  const remaining = Math.max(0, project.entries - project.log.length);
-  return (
-    <SectionWrap className="pb-8">
-      <div className="overflow-hidden rounded-2xl border border-border-base bg-surface-card">
-        <div className="flex items-center justify-between border-b border-border-base px-6 py-4">
-          <div className="flex items-center gap-3.5">
-            <h2 className="font-display text-lg font-semibold text-fg-primary">
-              Activity log
-            </h2>
-            <span className="font-mono text-[11px] text-fg-muted">
-              {project.log.length} of {project.entries} visible
-            </span>
-          </div>
-          <div className="hidden gap-2 sm:flex">
-            {(["All", "Code", "Design", "Doc", "Talk"] as const).map((f, i) => (
-              <FilterChip key={f} active={i === 0}>
-                {f}
-              </FilterChip>
-            ))}
-          </div>
-        </div>
-
-        <ColumnHead variant="project" />
-
-        {project.log.map((row, i) => (
-          <ProjectLogRow
-            key={i}
-            row={row}
-            authorName={lookupName(row.authorHandle)}
-          />
-        ))}
-
-        <BlurredRow opacity={0.4} />
-        <BlurredRow opacity={0.18} />
-
-        <PaywallBox remaining={remaining} />
-      </div>
-    </SectionWrap>
-  );
-}
-
-function ProjectLogRow({
-  row,
-  authorName,
-}: {
-  row: { day: number; authorHandle: string; text: string; scores: string };
-  authorName: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 border-b border-border-soft px-6 py-3">
-      <span className="w-[50px] flex-none font-mono text-[12px] text-fg-muted">
-        d{row.day}
-      </span>
-      <Link
-        href={`/u/${row.authorHandle}`}
-        className="hidden w-[140px] flex-none truncate text-[13px] font-semibold text-fg-primary hover:underline md:block"
-      >
-        {authorName}
-      </Link>
-      <span className="flex-1 truncate text-[13px] text-[#333]">{row.text}</span>
-      <span className="hidden w-[130px] flex-none text-right font-mono text-[11px] font-semibold text-[#3D7B0E] md:block">
-        {row.scores}
-      </span>
-    </div>
-  );
-}
-
-function ColumnHead({ variant }: { variant: "project" | "builder" }) {
-  if (variant === "project") {
-    return (
-      <div className="flex items-center gap-3 border-b border-border-soft bg-[#FCFCFC] px-6 py-2.5">
-        <ColLabel className="w-[50px]">DAY</ColLabel>
-        <ColLabel className="hidden w-[140px] md:block">AUTHOR</ColLabel>
-        <ColLabel className="flex-1">WHAT · ARTIFACT</ColLabel>
-        <ColLabel className="hidden w-[130px] text-right md:block">
-          SCORES
-        </ColLabel>
-      </div>
-    );
-  }
-  return (
-    <div className="flex items-center gap-3 border-b border-border-soft bg-[#FCFCFC] px-6 py-2.5">
-      <ColLabel className="w-[50px]">DAY</ColLabel>
-      <ColLabel className="flex-1">WHAT · ARTIFACT</ColLabel>
-      <ColLabel className="hidden w-[80px] md:block">TIME</ColLabel>
-      <ColLabel className="hidden w-[130px] text-right md:block">
-        SCORES
-      </ColLabel>
-    </div>
-  );
-}
-
-function ColLabel({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      className={`font-mono text-[10px] tracking-[0.2em] text-fg-muted ${className}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function BlurredRow({ opacity }: { opacity: number }) {
-  return (
-    <div
-      className="flex items-center gap-3 border-b border-border-soft px-6 py-3"
-      style={{ opacity }}
-      aria-hidden
-    >
-      <span className="w-[50px] flex-none font-mono text-[12px] text-[#CCC]">
-        d12
-      </span>
-      <span className="hidden w-[140px] flex-none truncate text-[13px] font-semibold text-[#E5E5E5] md:block">
-        ████████
-      </span>
-      <span className="flex-1 truncate text-[13px] text-[#E5E5E5]">
-        ████████ ████████ ████████ ████████ ████ ████████ · ████
-      </span>
-      <span className="hidden w-[130px] flex-none text-right font-mono text-[11px] font-semibold text-[#E5E5E5] md:block">
-        █.█ / █.█
-      </span>
-    </div>
-  );
-}
-
-function PaywallBox({ remaining }: { remaining: number }) {
-  return (
-    <div className="flex flex-col items-center gap-3.5 border-t border-border-base bg-surface-card-alt px-6 py-7 text-center">
-      <LockIcon size={24} />
-      <h3 className="max-w-[640px] font-display text-2xl font-semibold tracking-[-0.01em] text-fg-primary">
-        {remaining} more entries — 30 days of verified work
-      </h3>
-      <p className="max-w-[560px] text-[14px] text-fg-secondary">
-        Full text · all artifacts · per-entry comments · who scored what.
-      </p>
-      <div className="mt-2 flex flex-col gap-2.5 sm:flex-row">
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-full bg-surface-inverse px-5 py-3 text-[13px] font-semibold text-fg-inverse hover:opacity-90"
-        >
-          Unlock this project — $500
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-3 text-[13px] font-semibold text-fg-inverse hover:bg-accent-hover"
-        >
-          Subscribe Pro — $200/mo
-        </button>
-      </div>
-      <p className="font-mono text-[11px] text-fg-muted">
-        Pro includes unlimited reads + artifact-search across all live projects.
-      </p>
-    </div>
-  );
-}
-
-/* -------------------------- Shared helpers -------------------------- */
-
-function FilterChip({
-  active = false,
-  children,
-}: {
-  active?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      className={`inline-flex items-center rounded-full px-3 py-[5px] font-mono text-[11px] transition-colors ${
-        active
-          ? "bg-surface-inverse font-semibold text-fg-inverse"
-          : "border border-border-base bg-surface-card-alt text-fg-secondary hover:text-fg-primary"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function SectionWrap({
   children,
   className = "",
@@ -456,24 +268,6 @@ function SectionWrap({
     </section>
   );
 }
-
-function lighten(hex: string) {
-  // For our palette, the bg already lightens vs fg; this returns a paler version
-  return hex + "AA";
-}
-
-function lookupName(handle: string): string {
-  const map: Record<string, string> = {
-    "sasha-k": "Sasha K.",
-    "aya-s": "Aya S.",
-    "marcus-r": "Marcus R.",
-    "lila-p": "Lila P.",
-    "dima-j": "Dima J.",
-  };
-  return map[handle] ?? handle;
-}
-
-/* -------------------------- Icons -------------------------- */
 
 function SparklesIcon({ size = 22 }: { size?: number }) {
   return (
@@ -492,15 +286,6 @@ function LockOpenIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <rect x="3" y="11" width="18" height="11" rx="2" />
       <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-    </svg>
-  );
-}
-
-function LockIcon({ size = 24 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="11" width="18" height="11" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
 }

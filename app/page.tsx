@@ -1,23 +1,82 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { LandingHeader } from "@/components/LandingHeader";
 import { Footer } from "@/components/Footer";
 import { PROJECTS as DATA_PROJECTS } from "@/lib/data";
 
 type Tab = "projects" | "log";
+type ProjFilter = "all" | "hiring" | "stealth" | "lead" | "launch";
+type LogFilter = "all" | "code" | "design" | "doc" | "talk" | "data";
+
+const VISIBLE_LIMIT = 10;
 
 export default function CohortPage() {
   const [tab, setTab] = useState<Tab>("projects");
+  const [query, setQuery] = useState("");
+  const [projFilter, setProjFilter] = useState<ProjFilter>("all");
+  const [logFilter, setLogFilter] = useState<LogFilter>("all");
+  const [expanded, setExpanded] = useState(false);
+
+  const projectsFiltered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return PROJECTS.filter((p) => {
+      if (q) {
+        const hay = `${p.name} ${p.desc} ${p.slug}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (projFilter === "all") return true;
+      if (projFilter === "hiring")
+        return p.badge.text === "HIRING" || p.badge.text === "OPEN" || p.badge.text === "BETA";
+      if (projFilter === "stealth") return p.badge.text === "STEALTH";
+      if (projFilter === "lead") return p.badge.text === "LEAD?";
+      if (projFilter === "launch") return p.badge.text === "LAUNCH";
+      return true;
+    });
+  }, [query, projFilter]);
+
+  const logFiltered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return LOG_ENTRIES.filter((e) => {
+      if (q) {
+        const hay = `${e.team} ${e.who} ${e.did}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (logFilter === "all") return true;
+      return e.type === logFilter;
+    });
+  }, [query, logFilter]);
 
   return (
     <>
       <LandingHeader current="feed" />
       <main className="bg-surface-primary">
-        <Hero />
-        <FeedSection tab={tab} onTab={setTab} />
+        <Hero query={query} onQuery={setQuery} />
+        <FeedSection
+          tab={tab}
+          onTab={(t) => {
+            setTab(t);
+            setExpanded(false);
+          }}
+          projFilter={projFilter}
+          onProjFilter={(f) => {
+            setProjFilter(f);
+            setExpanded(false);
+          }}
+          logFilter={logFilter}
+          onLogFilter={(f) => {
+            setLogFilter(f);
+            setExpanded(false);
+          }}
+          expanded={expanded}
+          onExpand={() => setExpanded(true)}
+          projects={projectsFiltered}
+          logs={logFiltered}
+          totalProjects={PROJECTS.length}
+          totalLogs={LOG_ENTRIES.length}
+        />
       </main>
       <Footer />
     </>
@@ -26,7 +85,13 @@ export default function CohortPage() {
 
 /* -------------------------- Hero -------------------------- */
 
-function Hero() {
+function Hero({
+  query,
+  onQuery,
+}: {
+  query: string;
+  onQuery: (v: string) => void;
+}) {
   return (
     <section className="flex flex-col items-center gap-6 px-6 pb-10 pt-16 sm:px-12 md:px-20">
       <h1 className="text-center font-sans text-5xl font-bold leading-[1.05] tracking-[-0.035em] text-fg-primary sm:text-6xl md:text-[84px]">
@@ -35,7 +100,7 @@ function Hero() {
         Just create it.
       </h1>
 
-      <SearchBar />
+      <SearchBar query={query} onQuery={onQuery} />
 
       <div className="mt-2 flex flex-col gap-3.5 sm:flex-row">
         <RoleButton kind="hire" />
@@ -45,18 +110,37 @@ function Hero() {
   );
 }
 
-function SearchBar() {
+function SearchBar({
+  query,
+  onQuery,
+}: {
+  query: string;
+  onQuery: (v: string) => void;
+}) {
   return (
     <div className="flex w-full max-w-[560px] items-center gap-2.5 rounded-full border border-border-base bg-surface-card px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <SearchIcon size={16} color="#999" />
       <input
         type="text"
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
         placeholder="Search teams, builders, skills…"
         className="flex-1 bg-transparent text-[14px] text-fg-primary outline-none placeholder:text-fg-muted"
       />
-      <span className="rounded-md border border-border-base bg-surface-card-alt px-1.5 py-[3px] font-mono text-[11px] text-fg-muted">
-        ⌘ K
-      </span>
+      {query ? (
+        <button
+          type="button"
+          onClick={() => onQuery("")}
+          className="rounded-md border border-border-base bg-surface-card-alt px-1.5 py-[3px] font-mono text-[11px] text-fg-muted hover:text-fg-primary"
+          aria-label="Clear search"
+        >
+          ✕
+        </button>
+      ) : (
+        <span className="rounded-md border border-border-base bg-surface-card-alt px-1.5 py-[3px] font-mono text-[11px] text-fg-muted">
+          ⌘ K
+        </span>
+      )}
     </div>
   );
 }
@@ -95,52 +179,109 @@ function RoleButton({ kind }: { kind: "hire" | "build" }) {
 function FeedSection({
   tab,
   onTab,
+  projFilter,
+  onProjFilter,
+  logFilter,
+  onLogFilter,
+  expanded,
+  onExpand,
+  projects,
+  logs,
+  totalProjects,
+  totalLogs,
 }: {
   tab: Tab;
   onTab: (t: Tab) => void;
+  projFilter: ProjFilter;
+  onProjFilter: (f: ProjFilter) => void;
+  logFilter: LogFilter;
+  onLogFilter: (f: LogFilter) => void;
+  expanded: boolean;
+  onExpand: () => void;
+  projects: ProjectCardData[];
+  logs: LogEntry[];
+  totalProjects: number;
+  totalLogs: number;
 }) {
+  const visibleProjects = expanded ? projects : projects.slice(0, VISIBLE_LIMIT);
+  const visibleLogs = expanded ? logs : logs.slice(0, VISIBLE_LIMIT);
+  const showExpand =
+    tab === "projects"
+      ? !expanded && projects.length > VISIBLE_LIMIT
+      : !expanded && logs.length > VISIBLE_LIMIT;
+
   return (
     <section className="px-6 pb-20 sm:px-12 md:px-20">
       <div className="mx-auto max-w-[1200px]">
-        <div className="flex items-center justify-between pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
           <Tabs tab={tab} onTab={onTab} />
-          <div className="flex items-center gap-3.5">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
-              <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-secondary">
-                LIVE
-              </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+            <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-secondary">
+              LIVE
             </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full border border-border-base px-3 py-1.5 font-mono text-[11px] text-fg-muted transition-colors hover:text-fg-primary"
-            >
-              <SearchIcon size={12} color="#999" />
-              Filter
-            </button>
-          </div>
+          </span>
         </div>
 
-        <div className="flex items-center justify-between pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
           <div className="flex flex-wrap gap-1.5">
-            {(tab === "projects" ? PROJECT_FILTERS : LOG_FILTERS).map(
-              (f, i) => (
-                <FilterChip key={f} active={i === 0}>
-                  {f}
-                </FilterChip>
-              ),
-            )}
+            {tab === "projects"
+              ? PROJECT_FILTERS.map((f) => (
+                  <FilterChip
+                    key={f.key}
+                    active={projFilter === f.key}
+                    onClick={() => onProjFilter(f.key)}
+                  >
+                    {f.label}
+                  </FilterChip>
+                ))
+              : LOG_FILTERS.map((f) => (
+                  <FilterChip
+                    key={f.key}
+                    active={logFilter === f.key}
+                    onClick={() => onLogFilter(f.key)}
+                  >
+                    {f.label}
+                  </FilterChip>
+                ))}
           </div>
           <span className="hidden font-mono text-[11px] text-fg-muted sm:block">
             Sort: peer score
           </span>
         </div>
 
-        {tab === "projects" ? <ProjectGrid /> : <ActivityLog />}
+        {tab === "projects" ? (
+          projects.length === 0 ? (
+            <EmptyHint />
+          ) : (
+            <ProjectGrid items={visibleProjects} />
+          )
+        ) : logs.length === 0 ? (
+          <EmptyHint />
+        ) : (
+          <ActivityLog items={visibleLogs} />
+        )}
 
-        <FeedFooter tab={tab} />
+        <FeedFooter
+          tab={tab}
+          showExpand={showExpand}
+          onExpand={onExpand}
+          shown={tab === "projects" ? visibleProjects.length : visibleLogs.length}
+          total={tab === "projects" ? totalProjects : totalLogs}
+          filtered={tab === "projects" ? projects.length : logs.length}
+        />
       </div>
     </section>
+  );
+}
+
+function EmptyHint() {
+  return (
+    <div className="rounded-2xl border border-dashed border-border-base bg-surface-card-alt px-6 py-10 text-center">
+      <p className="font-mono text-[12px] text-fg-muted">
+        Nothing matches. Clear the search or pick a different filter.
+      </p>
+    </div>
   );
 }
 
@@ -205,25 +346,36 @@ function TabButton({
   );
 }
 
-const PROJECT_FILTERS = [
-  "All",
-  "Hiring",
-  "Stealth",
-  "Looking for lead",
-  "Public launch",
+const PROJECT_FILTERS: { key: ProjFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "hiring", label: "Hiring" },
+  { key: "stealth", label: "Stealth" },
+  { key: "lead", label: "Looking for lead" },
+  { key: "launch", label: "Public launch" },
 ];
-const LOG_FILTERS = ["All", "Code", "Design", "Research", "External"];
+
+const LOG_FILTERS: { key: LogFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "code", label: "Code" },
+  { key: "design", label: "Design" },
+  { key: "doc", label: "Doc" },
+  { key: "talk", label: "Talk" },
+  { key: "data", label: "Data" },
+];
 
 function FilterChip({
   active = false,
+  onClick,
   children,
 }: {
   active?: boolean;
+  onClick?: () => void;
   children: ReactNode;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className={`inline-flex items-center rounded-full px-3 py-1 font-mono text-[11px] transition-colors ${
         active
           ? "border border-border-base bg-surface-card-alt font-semibold text-fg-primary"
@@ -263,10 +415,10 @@ const PROJECTS: ProjectCardData[] = DATA_PROJECTS.map((p) => ({
   rating: p.rating,
 }));
 
-function ProjectGrid() {
+function ProjectGrid({ items }: { items: ProjectCardData[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      {PROJECTS.map((p) => (
+      {items.map((p) => (
         <ProjectCard key={p.slug} p={p} />
       ))}
     </div>
@@ -315,7 +467,7 @@ function ProjectCard({ p }: { p: ProjectCardData }) {
 
 type LogEntry = {
   time: string;
-  type: "code" | "call" | "design" | "doc" | "data";
+  type: "code" | "talk" | "design" | "doc" | "data";
   team: string;
   teamSlug?: string;
   who: string;
@@ -329,7 +481,7 @@ const TYPE_COLORS: Record<
   { bg: string; fg: string; icon: ReactNode }
 > = {
   code: { bg: "#FFE0B2", fg: "#E65100", icon: <PRIcon /> },
-  call: { bg: "#E1BEE7", fg: "#7B1FA2", icon: <PhoneIcon /> },
+  talk: { bg: "#E1BEE7", fg: "#7B1FA2", icon: <PhoneIcon /> },
   design: { bg: "#C8E6C9", fg: "#2E7D32", icon: <FigmaIcon /> },
   doc: { bg: "#FFCDD2", fg: "#C62828", icon: <PencilIcon /> },
   data: { bg: "#BBDEFB", fg: "#1565C0", icon: <CommitIcon /> },
@@ -337,22 +489,22 @@ const TYPE_COLORS: Record<
 
 const LOG_ENTRIES: LogEntry[] = [
   { time: "2m", type: "code", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Sasha K.", whoHandle: "sasha-k", did: "pushed 13 commits — match scoring v2 endpoint", meta: "3h · PR #142" },
-  { time: "5m", type: "call", team: "TeamPulse", teamSlug: "teampulse", who: "Aya S.", whoHandle: "aya-s", did: "finished 5 user interviews — async standup pain validated", meta: "4h · 5 transcripts" },
+  { time: "5m", type: "talk", team: "TeamPulse", teamSlug: "teampulse", who: "Aya S.", whoHandle: "aya-s", did: "finished 5 user interviews — async standup pain validated", meta: "4h · 5 transcripts" },
   { time: "12m", type: "design", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Lila P.", whoHandle: "lila-p", did: "shipped 4 new screens — onboarding, profile, match, settings", meta: "5h · Figma" },
   { time: "21m", type: "doc", team: "DealRoom", teamSlug: "dealroom", who: "Sasha K.", whoHandle: "sasha-k", did: "drafted dashboard wireframe — pipeline view, deal stages", meta: "2h · Excalidraw" },
   { time: "38m", type: "data", team: "TeamPulse", teamSlug: "teampulse", who: "Marcus R.", whoHandle: "marcus-r", did: "migrated DB to Postgres — auth + sessions tables live", meta: "6h · commit a4f81" },
   { time: "54m", type: "code", team: "SkillStack", teamSlug: "skillstack", who: "Lila P.", whoHandle: "lila-p", did: "validated SkillStack idea with 30 survey responses", meta: "3h · 30 responses" },
-  { time: "1h", type: "call", team: "QuietHire", teamSlug: "quiethire", who: "Dima J.", whoHandle: "dima-j", did: "posted spec doc — sync engine v1, conflict resolution", meta: "4h · Notion" },
+  { time: "1h", type: "talk", team: "QuietHire", teamSlug: "quiethire", who: "Dima J.", whoHandle: "dima-j", did: "posted spec doc — sync engine v1, conflict resolution", meta: "4h · Notion" },
   { time: "1h", type: "design", team: "DealRoom", teamSlug: "dealroom", who: "Marcus R.", whoHandle: "marcus-r", did: "peer-reviewed teammate's PR — 2 blockers raised, 1 resolved", meta: "45m · review" },
   { time: "2h", type: "doc", team: "Team #42", teamSlug: "team-42", who: "Anonymous", did: "sent 18 cold emails — 3 demo bookings on the calendar", meta: "2h · external" },
   { time: "3h", type: "data", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Aya S.", whoHandle: "aya-s", did: "deployed v0.4 to staging — embedding cache hit rate 94%", meta: "5h · deploy log" },
 ];
 
-function ActivityLog() {
+function ActivityLog({ items }: { items: LogEntry[] }) {
   return (
     <div className="overflow-hidden rounded-[10px] border border-border-base bg-surface-card">
-      {LOG_ENTRIES.map((e, i) => (
-        <LogRow key={i} entry={e} last={i === LOG_ENTRIES.length - 1} />
+      {items.map((e, i) => (
+        <LogRow key={i} entry={e} last={i === items.length - 1} />
       ))}
     </div>
   );
@@ -409,21 +561,40 @@ function LogRow({ entry: e, last }: { entry: LogEntry; last: boolean }) {
   );
 }
 
-function FeedFooter({ tab }: { tab: Tab }) {
+function FeedFooter({
+  tab,
+  showExpand,
+  onExpand,
+  shown,
+  total,
+  filtered,
+}: {
+  tab: Tab;
+  showExpand: boolean;
+  onExpand: () => void;
+  shown: number;
+  total: number;
+  filtered: number;
+}) {
+  const noun = tab === "projects" ? "projects" : "entries";
+  const filteredHint =
+    filtered !== total ? ` (${filtered} match)` : "";
   return (
     <div className="flex items-center justify-between pt-4">
       <span className="font-mono text-[11px] text-fg-muted">
-        {tab === "projects"
-          ? "Showing 10 of 247 projects"
-          : "Showing 10 of 347 entries today"}
+        Showing {shown} of {total} {noun}
+        {filteredHint}
       </span>
-      <button
-        type="button"
-        className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:text-accent-hover"
-      >
-        {tab === "projects" ? "Expand" : "See all"}
-        <ChevronIcon dir={tab === "projects" ? "down" : "right"} />
-      </button>
+      {showExpand && (
+        <button
+          type="button"
+          onClick={onExpand}
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent hover:text-accent-hover"
+        >
+          {tab === "projects" ? "Expand" : "See all"}
+          <ChevronIcon dir={tab === "projects" ? "down" : "right"} />
+        </button>
+      )}
     </div>
   );
 }

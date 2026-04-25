@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { LandingHeader } from "@/components/LandingHeader";
 import { Footer } from "@/components/Footer";
+import { InterestButton } from "@/components/InterestModal";
 
 export const metadata: Metadata = {
   title: "For hirers — Temporal One",
@@ -43,18 +44,18 @@ function Hero() {
         worked next to them.
       </p>
       <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-        <Link
-          href="#pricing"
+        <InterestButton
+          intent="pro-pilot"
           className="inline-flex items-center justify-center rounded-full bg-surface-inverse px-[22px] py-[14px] text-[14px] font-semibold text-fg-inverse transition-colors hover:opacity-90"
         >
           Talk to us — get pilot access
-        </Link>
-        <Link
-          href="#pricing"
+        </InterestButton>
+        <InterestButton
+          intent="unlock-project"
           className="inline-flex items-center justify-center rounded-full border-[1.5px] border-black bg-surface-card px-[22px] py-[14px] text-[14px] font-semibold text-fg-primary transition-colors hover:bg-surface-card-alt"
         >
           Unlock one log — $500
-        </Link>
+        </InterestButton>
       </div>
     </section>
   );
@@ -192,12 +193,13 @@ function PreviewCard() {
       <PreviewEntry day="d28" text="finished sign-up + email verification — async backend ready" />
       <PreviewEntry day="d27" text="migrated DB to Postgres + 4 sessions tables live" />
 
-      <Link
-        href="#"
+      <InterestButton
+        intent="unlock-builder"
+        target="aya-s · Aya S. (preview)"
         className="mt-1 inline-flex items-center justify-center rounded-full bg-surface-inverse px-4 py-3 text-[13px] font-semibold text-fg-inverse transition-colors hover:opacity-90"
       >
         Unlock full log — $500
-      </Link>
+      </InterestButton>
     </article>
   );
 }
@@ -248,12 +250,13 @@ function Pricing() {
             Unlimited reads of any builder&apos;s full log — artifacts, notes,
             scoring, comments. Per month.
           </p>
-          <button
-            type="button"
+          <InterestButton
+            intent="pro-monthly"
+            target="Individual · Unlimited ($150/mo)"
             className="mt-1 inline-flex items-center justify-center rounded-full border-[1.5px] border-black bg-surface-card px-5 py-3 text-[13px] font-semibold text-fg-primary transition-colors hover:bg-surface-card-alt"
           >
             Start monthly access
-          </button>
+          </InterestButton>
         </article>
 
         {/* Pro */}
@@ -285,12 +288,13 @@ function Pricing() {
               · &nbsp;Includes monthly access tier
             </li>
           </ul>
-          <button
-            type="button"
+          <InterestButton
+            intent="pro-monthly"
+            target="Pro · Artifact search ($200/mo)"
             className="inline-flex items-center justify-center rounded-full bg-accent px-5 py-3 text-[13px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
           >
             Start Pro
-          </button>
+          </InterestButton>
         </article>
 
         {/* Company */}
