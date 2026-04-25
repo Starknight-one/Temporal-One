@@ -6,6 +6,8 @@ import {
   sendEmail,
 } from "@/lib/email";
 import { ipFromRequest, rateLimit } from "@/lib/rate-limit";
+import { db } from "@/lib/db/client";
+import { interestSubmissions } from "@/lib/db/schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +83,19 @@ export async function POST(request: Request) {
     ``,
     ...rows.map(([k, v]) => `${k.padEnd(10)} ${v}`),
   ].join("\n");
+
+  try {
+    await db.insert(interestSubmissions).values({
+      intent,
+      target,
+      email,
+      company: company || null,
+      note: note || null,
+      ip,
+    });
+  } catch (err) {
+    console.error("[interest] DB insert failed (continuing to email):", err);
+  }
 
   try {
     await sendEmail({

@@ -1,179 +1,131 @@
-"use client";
-
-import { useState } from "react";
-import {
-  PREVIOUS_DAYS,
-  PUBLIC_DAY_TAGS,
-  SPRINT_DAY,
-  SPRINT_TOTAL,
-  type LogEntry,
-} from "@/lib/admin-data";
-import { useLog } from "@/components/admin/LogState";
+import { redirect } from "next/navigation";
+import { desc, eq } from "drizzle-orm";
+import { auth } from "@/auth";
+import { db } from "@/lib/db/client";
+import { logEntries, type LogEntryRow } from "@/lib/db/schema";
 import { ArtifactPreview, TypePill } from "@/components/admin/shared";
+import { AddLogEntryButton } from "@/components/admin/AddLogEntryModal";
+import type { ArtifactKind } from "@/lib/types";
 
-export default function TodayPage() {
-  const { entries, openModal } = useLog();
-  const [publicShare, setPublicShare] = useState(true);
+export const dynamic = "force-dynamic";
+
+export default async function TodayPage() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/signin?callbackUrl=/app/today");
+
+  const entries = await db
+    .select()
+    .from(logEntries)
+    .where(eq(logEntries.userId, session.user.id))
+    .orderBy(desc(logEntries.postedAt))
+    .limit(50);
+
+  const totalHours = entries.reduce(
+    (sum, e) => sum + Number(e.timeSpent ?? 0),
+    0,
+  );
+  const today = new Date();
+  const todayKey = isoDate(today);
+  const todayEntries = entries.filter(
+    (e) => isoDate(e.postedAt) === todayKey,
+  );
+  const todayHours = todayEntries.reduce(
+    (sum, e) => sum + Number(e.timeSpent ?? 0),
+    0,
+  );
+
+  const previousByDate = groupPrevious(entries.filter(
+    (e) => isoDate(e.postedAt) !== todayKey,
+  ));
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-6">
-      <StatusBar />
+      <StatusBar
+        totalEntries={entries.length}
+        totalHours={totalHours}
+        todayHours={todayHours}
+      />
 
-      <button
-        type="button"
-        onClick={openModal}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent py-4 text-[14px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
-      >
-        <PlusIcon />
-        Add log entry
-      </button>
+      <AddLogEntryButton />
 
       <section className="flex flex-col gap-3.5">
         <SectionHeader
           title="TODAY"
-          subtitle="APR 25"
-          right={`${entries.length} entries · ${entries.reduce(
-            (sum, e) => sum + parseFloat(e.timeSpent),
-            0,
-          )}h`}
+          subtitle={fmtMonthDay(today)}
+          right={`${todayEntries.length} entries · ${formatHours(todayHours)}`}
         />
-        <div className="flex flex-col gap-3">
-          {entries.map((e) => (
-            <EntryCard key={e.id} entry={e} />
-          ))}
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border border-border-base bg-surface-card">
-        <div className="flex items-center justify-between border-b border-border-base px-5 py-3">
-          <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-secondary">
-            PREVIOUS DAYS
-          </span>
-          <span className="font-mono text-[11px] text-fg-muted">
-            6 days · 28 entries · 32h
-          </span>
-        </div>
-        {PREVIOUS_DAYS.map((d) => (
-          <div
-            key={d.day}
-            className="flex items-center gap-4 border-b border-border-soft px-5 py-3 last:border-b-0 hover:bg-surface-card-alt"
-          >
-            <ChevronRight />
-            <span className="w-16 font-mono text-[12px] font-semibold text-fg-primary">
-              {d.dateLabel}
-            </span>
-            <span className="text-[13px] text-fg-secondary">
-              {d.entries} entries, {d.hours}
-            </span>
-            {d.warnings && (
-              <span className="ml-auto rounded-full bg-[#FFCDD2] px-2 py-[2px] font-mono text-[10px] font-semibold text-[#C62828]">
-                {d.warnings}
-              </span>
-            )}
-            {d.reviewsLabel && (
-              <span className="ml-auto font-mono text-[11px] text-fg-muted">
-                {d.reviewsLabel}
-              </span>
-            )}
+        {todayEntries.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border-base bg-surface-card-alt px-6 py-10 text-center">
+            <p className="text-[14px] text-fg-secondary">
+              Nothing logged yet today.
+            </p>
+            <p className="mt-1 font-mono text-[11px] text-fg-muted">
+              Hit “Add log entry” above. Two minutes max — title, link, type, hours.
+            </p>
           </div>
-        ))}
+        ) : (
+          <div className="flex flex-col gap-3">
+            {todayEntries.map((e) => (
+              <EntryCard key={e.id} entry={e} />
+            ))}
+          </div>
+        )}
       </section>
 
-      <section className="flex flex-col gap-4 rounded-xl border border-border-base bg-surface-card-alt p-6">
-        <div className="flex items-center justify-between">
-          <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-secondary">
-            👁  WHAT EMPLOYERS SEE
-          </span>
-          <a
-            href={`/u/anna-${SPRINT_DAY}`}
-            className="font-mono text-[11px] font-semibold text-accent hover:underline"
-          >
-            ↗ TEMPORAL.ONE/ANNA-D{SPRINT_DAY}
-          </a>
-        </div>
-        <div className="flex items-center gap-4">
-          <h3 className="font-display text-[28px] font-semibold leading-tight text-fg-primary">
-            Day {SPRINT_DAY} of {SPRINT_TOTAL} sprint
-          </h3>
-        </div>
-        <div className="flex flex-wrap items-center gap-4 font-mono text-[12px] text-fg-secondary">
-          <span>{entries.length + 16} entries</span>
-          <span>·</span>
-          <span>47h logged</span>
-          <span>·</span>
-          <span>avg 6.7h/day</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] text-fg-secondary">
-          <span>5/5</span>
-          <span>3 docs</span>
-          <span>2 designs</span>
-          <span>4 conversations</span>
-          <span>4 external</span>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          {PUBLIC_DAY_TAGS.map((t) => (
-            <span
-              key={t.label}
-              className="rounded-md border border-border-base bg-surface-card px-2.5 py-1 font-mono text-[11px] text-fg-secondary"
-            >
-              {t.label} · {t.count}
+      {previousByDate.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-border-base bg-surface-card">
+          <div className="flex items-center justify-between border-b border-border-base px-5 py-3">
+            <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-secondary">
+              PREVIOUS DAYS
             </span>
+            <span className="font-mono text-[11px] text-fg-muted">
+              {previousByDate.length} day{previousByDate.length === 1 ? "" : "s"} ·{" "}
+              {entries.length - todayEntries.length} entries
+            </span>
+          </div>
+          {previousByDate.map((d) => (
+            <div
+              key={d.date}
+              className="flex items-center gap-4 border-b border-border-soft px-5 py-3 last:border-b-0 hover:bg-surface-card-alt"
+            >
+              <span className="w-16 font-mono text-[12px] font-semibold text-fg-primary">
+                {d.label}
+              </span>
+              <span className="text-[13px] text-fg-secondary">
+                {d.count} {d.count === 1 ? "entry" : "entries"}, {formatHours(d.hours)}
+              </span>
+            </div>
           ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-3 border-t border-border-base pt-4">
-          <label className="inline-flex items-center gap-2.5">
-            <span
-              role="switch"
-              aria-checked={publicShare}
-              tabIndex={0}
-              onClick={() => setPublicShare((v) => !v)}
-              onKeyDown={(e) => {
-                if (e.key === " " || e.key === "Enter") {
-                  e.preventDefault();
-                  setPublicShare((v) => !v);
-                }
-              }}
-              className={`relative inline-flex h-6 w-11 cursor-pointer items-center rounded-full transition-colors ${
-                publicShare ? "bg-accent" : "bg-border-base"
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                  publicShare ? "translate-x-[22px]" : "translate-x-[2px]"
-                }`}
-              />
-            </span>
-            <span className="text-[13px] font-medium text-fg-primary">
-              Project name public
-            </span>
-          </label>
-          <span className="ml-auto" />
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border-base bg-surface-card px-3 py-1.5 text-[12px] font-medium text-fg-primary hover:bg-surface-card-alt"
-          >
-            <CopyIcon />
-            Copy public link
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-md bg-surface-inverse px-3 py-1.5 text-[12px] font-medium text-fg-inverse hover:opacity-90"
-          >
-            <DownloadIcon />
-            Download PDF
-          </button>
-        </div>
+        </section>
+      )}
+
+      <section className="flex flex-col gap-3 rounded-xl border border-border-base bg-surface-card-alt p-6">
+        <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-secondary">
+          👁  WHAT EMPLOYERS SEE
+        </span>
+        <p className="text-[13px] leading-relaxed text-fg-secondary">
+          Public summary ships when you join a cohort. For now your log is
+          private to you.
+        </p>
       </section>
     </div>
   );
 }
 
-function StatusBar() {
+function StatusBar({
+  totalEntries,
+  totalHours,
+  todayHours,
+}: {
+  totalEntries: number;
+  totalHours: number;
+  todayHours: number;
+}) {
   return (
     <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border-base bg-border-base sm:grid-cols-4">
-      <Cell label="DAY" value={`${SPRINT_DAY} of ${SPRINT_TOTAL}`} />
-      <Cell label="STREAK" value="7 days" />
-      <Cell label="ACTIVITY TIME" value="4h 23m" />
+      <Cell label="ENTRIES" value={String(totalEntries)} />
+      <Cell label="TOTAL TIME" value={formatHours(totalHours)} />
+      <Cell label="TODAY" value={formatHours(todayHours)} />
       <Cell label="WARNINGS" value="0" tone="ok" />
     </div>
   );
@@ -235,104 +187,81 @@ function SectionHeader({
   );
 }
 
-function EntryCard({ entry }: { entry: LogEntry }) {
+function EntryCard({ entry }: { entry: LogEntryRow }) {
+  const meta = entry.artifactMeta as
+    | { shortUrl?: string; number?: string }
+    | null;
+  const artifact = entry.artifactUrl
+    ? {
+        kind: (entry.artifactKind ?? "external") as ArtifactKind,
+        title:
+          entry.artifactKind === "github" && meta?.number
+            ? `GitHub PR #${meta.number}`
+            : entry.artifactUrl,
+        meta: meta?.shortUrl ?? entry.artifactUrl,
+        href: entry.artifactUrl,
+      }
+    : null;
   return (
     <article className="flex flex-col gap-3 rounded-xl border border-border-base bg-surface-card px-5 py-4">
       <div className="flex items-start gap-3">
         <h4 className="flex-1 text-[15px] font-semibold leading-snug text-fg-primary">
           {entry.title}
         </h4>
-        <button
-          type="button"
-          className="text-fg-muted hover:text-fg-primary"
-          aria-label="Edit entry"
-        >
-          ⋯
-        </button>
       </div>
-      {entry.artifact && <ArtifactPreview artifact={entry.artifact} />}
+      {artifact && <ArtifactPreview artifact={artifact} />}
       <div className="flex flex-wrap items-center gap-3 border-t border-border-soft pt-3 font-mono text-[11px] text-fg-muted">
         <TypePill type={entry.type} />
-        <span>{entry.timeSpent}</span>
-        <span className="ml-auto">{entry.postedAgo}</span>
+        <span>{formatHours(Number(entry.timeSpent))}</span>
+        <span className="ml-auto">{relativeTime(entry.postedAt)}</span>
       </div>
     </article>
   );
 }
 
-function PlusIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
+function isoDate(d: Date | string | null): string {
+  if (!d) return "";
+  const date = d instanceof Date ? d : new Date(d);
+  return date.toISOString().slice(0, 10);
 }
 
-function ChevronRight() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="text-fg-muted"
-      aria-hidden
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
+function fmtMonthDay(d: Date): string {
+  return d.toLocaleString("en-US", { month: "short", day: "numeric" }).toUpperCase();
 }
 
-function CopyIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
+function formatHours(h: number): string {
+  if (!Number.isFinite(h) || h === 0) return "0h";
+  return `${h.toFixed(h % 1 === 0 ? 0 : 1)}h`;
 }
 
-function DownloadIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
+function relativeTime(d: Date | string): string {
+  const date = d instanceof Date ? d : new Date(d);
+  const ms = Date.now() - date.getTime();
+  const min = Math.round(ms / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.round(h / 24);
+  return `${days}d ago`;
+}
+
+function groupPrevious(rows: LogEntryRow[]) {
+  const map = new Map<string, { date: string; count: number; hours: number }>();
+  for (const r of rows) {
+    const key = isoDate(r.postedAt);
+    const existing = map.get(key) ?? { date: key, count: 0, hours: 0 };
+    existing.count += 1;
+    existing.hours += Number(r.timeSpent ?? 0);
+    map.set(key, existing);
+  }
+  return Array.from(map.values())
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .map((d) => ({
+      ...d,
+      label: new Date(d.date).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+      }),
+    }));
 }

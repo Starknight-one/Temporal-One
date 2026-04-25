@@ -1,32 +1,63 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { useLog } from "./LogState";
-import type { EntryType } from "@/lib/admin-data";
+import { useRouter } from "next/navigation";
+import { ENTRY_TYPES, type EntryType } from "@/lib/types";
 
-const TYPES: { key: EntryType; label: string }[] = [
-  { key: "built", label: "Built" },
-  { key: "fixed", label: "Fixed" },
-  { key: "researched", label: "Researched" },
-  { key: "designed", label: "Designed" },
-  { key: "shipped", label: "Shipped" },
-  { key: "blocked", label: "Blocked" },
-];
+const TYPE_LABELS: Record<EntryType, string> = {
+  built: "Built",
+  fixed: "Fixed",
+  researched: "Researched",
+  designed: "Designed",
+  shipped: "Shipped",
+  blocked: "Blocked",
+};
 
-export function AddLogEntryModal() {
-  const { modalOpen, closeModal, addEntry } = useLog();
+export function AddLogEntryButton({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={
+          className ??
+          "inline-flex items-center justify-center gap-2 rounded-xl bg-accent py-4 text-[14px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
+        }
+      >
+        {children ?? (
+          <>
+            <PlusIcon />
+            Add log entry
+          </>
+        )}
+      </button>
+      {open && <AddLogEntryModal onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function AddLogEntryModal({ onClose }: { onClose: () => void }) {
   const titleId = useId();
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [artifactUrl, setArtifactUrl] = useState("");
   const [type, setType] = useState<EntryType>("built");
   const [hours, setHours] = useState(3);
   const [showNote, setShowNote] = useState(false);
   const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!modalOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeModal();
+      if (e.key === "Escape" && !submitting) onClose();
     };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -34,18 +65,7 @@ export function AddLogEntryModal() {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [modalOpen, closeModal]);
-
-  useEffect(() => {
-    if (!modalOpen) {
-      setTitle("");
-      setArtifactUrl("");
-      setType("built");
-      setHours(3);
-      setShowNote(false);
-      setNote("");
-    }
-  }, [modalOpen]);
+  }, [onClose, submitting]);
 
   const detected = useMemo(() => {
     const m = artifactUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
@@ -56,24 +76,38 @@ export function AddLogEntryModal() {
     };
   }, [artifactUrl]);
 
-  if (!modalOpen) return null;
-
-  function onSave() {
-    if (!title.trim()) return;
-    addEntry({
-      title: title.trim(),
-      type,
-      timeSpent: `${hours}h`,
-      artifactUrl: artifactUrl.trim() || undefined,
-      note: note.trim() || undefined,
-    });
-    closeModal();
+  async function onSave() {
+    if (!title.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/log-entries", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          type,
+          timeSpent: hours,
+          artifactUrl: artifactUrl.trim() || undefined,
+          note: note.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      router.refresh();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "save_failed");
+      setSubmitting(false);
+    }
   }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-      onClick={closeModal}
+      onClick={() => !submitting && onClose()}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -91,7 +125,7 @@ export function AddLogEntryModal() {
           </h2>
           <button
             type="button"
-            onClick={closeModal}
+            onClick={() => !submitting && onClose()}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-secondary hover:bg-surface-card-alt hover:text-fg-primary"
             aria-label="Close"
           >
@@ -107,7 +141,8 @@ export function AddLogEntryModal() {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Built login form with OAuth"
               maxLength={200}
-              className="w-full rounded-lg border border-accent bg-surface-card px-3 py-2.5 text-[14px] text-fg-primary outline-none focus:border-accent"
+              disabled={submitting}
+              className="w-full rounded-lg border border-accent bg-surface-card px-3 py-2.5 text-[14px] text-fg-primary outline-none focus:border-accent disabled:bg-surface-card-alt"
             />
             <span className="text-right font-mono text-[10px] text-fg-muted">
               {title.length} / 200
@@ -121,6 +156,7 @@ export function AddLogEntryModal() {
                 value={artifactUrl}
                 onChange={(e) => setArtifactUrl(e.target.value)}
                 placeholder="github.com/team42/hirematch/pull/142"
+                disabled={submitting}
                 className="flex-1 bg-transparent text-[13px] text-fg-primary outline-none placeholder:text-fg-muted"
               />
             </div>
@@ -132,7 +168,7 @@ export function AddLogEntryModal() {
                     Detected: GitHub PR #{detected.number}
                   </span>
                   <span className="font-mono text-[11px] text-[#558B2F]">
-                    we'll link this to your entry
+                    we&apos;ll link this to your entry
                   </span>
                 </div>
               </div>
@@ -141,18 +177,19 @@ export function AddLogEntryModal() {
 
           <Field label="Type">
             <div className="flex flex-wrap gap-1.5">
-              {TYPES.map((t) => (
+              {ENTRY_TYPES.map((t) => (
                 <button
-                  key={t.key}
+                  key={t}
                   type="button"
-                  onClick={() => setType(t.key)}
+                  onClick={() => setType(t)}
+                  disabled={submitting}
                   className={`rounded-md border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                    type === t.key
+                    type === t
                       ? "border-accent bg-[#FFF3E0] text-accent"
                       : "border-border-base bg-surface-card text-fg-secondary hover:text-fg-primary"
                   }`}
                 >
-                  {t.label}
+                  {TYPE_LABELS[t]}
                 </button>
               ))}
             </div>
@@ -167,6 +204,7 @@ export function AddLogEntryModal() {
                 step={0.5}
                 value={hours}
                 onChange={(e) => setHours(Number(e.target.value))}
+                disabled={submitting}
                 className="flex-1 accent-accent"
               />
               <span className="w-12 text-right font-mono text-[12px] font-semibold text-fg-primary">
@@ -182,6 +220,7 @@ export function AddLogEntryModal() {
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Optional context — what made this hard, who helped, what's next."
                 rows={3}
+                disabled={submitting}
                 className="w-full resize-none rounded-lg border border-border-base bg-surface-card px-3 py-2.5 text-[13px] text-fg-primary outline-none focus:border-accent"
               />
             </Field>
@@ -194,6 +233,12 @@ export function AddLogEntryModal() {
               + Add note (optional)
             </button>
           )}
+
+          {error && (
+            <div className="rounded-md bg-[#FFEBEE] px-3 py-2 font-mono text-[11px] text-[#C62828]">
+              {error}
+            </div>
+          )}
         </div>
 
         <footer className="flex items-center gap-3 border-t border-border-soft bg-surface-card-alt px-[22px] py-4">
@@ -203,7 +248,7 @@ export function AddLogEntryModal() {
           <span className="ml-auto" />
           <button
             type="button"
-            onClick={closeModal}
+            onClick={() => !submitting && onClose()}
             className="rounded-md px-4 py-2 text-[13px] font-medium text-fg-secondary hover:text-fg-primary"
           >
             Cancel
@@ -211,10 +256,10 @@ export function AddLogEntryModal() {
           <button
             type="button"
             onClick={onSave}
-            disabled={!title.trim()}
+            disabled={!title.trim() || submitting}
             className="inline-flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-[13px] font-semibold text-fg-inverse transition-opacity hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Save entry →
+            {submitting ? "Saving…" : "Save entry →"}
           </button>
         </footer>
       </div>
@@ -274,6 +319,25 @@ function CheckIcon() {
       aria-hidden
     >
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   );
 }

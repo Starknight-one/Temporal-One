@@ -1,235 +1,144 @@
-"use client";
-
-import type { ReactNode } from "react";
-import { useState, type FormEvent } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth, signIn } from "@/auth";
 import { LandingHeader } from "@/components/LandingHeader";
 import { Footer } from "@/components/Footer";
+import { TelegramLoginButton } from "./TelegramLoginButton";
 
-type State =
-  | { kind: "idle" }
-  | { kind: "submitting" }
-  | { kind: "error"; message: string }
-  | { kind: "success"; email: string };
+export const metadata: Metadata = {
+  title: "Sign in — Temporal One",
+};
 
-export default function SignInPage() {
-  const [email, setEmail] = useState("");
-  const [website, setWebsite] = useState("");
-  const [state, setState] = useState<State>({ kind: "idle" });
+type Params = {
+  searchParams: Promise<{ callbackUrl?: string }>;
+};
 
-  async function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setState({ kind: "submitting" });
-    try {
-      const res = await fetch("/api/auth/magic-link", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, website }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Something went wrong. Try again.");
-      }
-      setState({ kind: "success", email });
-    } catch (err) {
-      setState({
-        kind: "error",
-        message: err instanceof Error ? err.message : "Something went wrong.",
-      });
-    }
+export default async function SigninPage({ searchParams }: Params) {
+  const { callbackUrl } = await searchParams;
+  const target = sanitizeCallback(callbackUrl) ?? "/app/today";
+
+  const session = await auth();
+  if (session?.user) redirect(target);
+
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME ?? "";
+
+  async function googleSignIn() {
+    "use server";
+    await signIn("google", { redirectTo: target });
   }
 
   return (
     <>
       <LandingHeader current="signin" />
       <main className="bg-surface-primary">
-        <Center>
-          {state.kind === "success" ? (
-            <Success email={state.email} />
-          ) : (
-            <Card>
-              <header className="flex flex-col items-center gap-2 px-8 pb-5 pt-9 text-center">
-                <span className="font-mono text-[11px] tracking-[0.35em] text-fg-muted">
-                  WELCOME
-                </span>
-                <h1 className="font-display text-[28px] font-semibold tracking-[-0.01em] text-fg-primary">
-                  Sign in to Temporal One
-                </h1>
-                <p className="text-[13px] leading-[1.5] text-fg-secondary">
-                  Sign-in is hand-handled for cohort #1. Enter your email — we&apos;ll
-                  reply with your access link within 24h.
-                </p>
-              </header>
+        <section className="mx-auto flex max-w-[1100px] flex-col gap-12 px-6 py-16 sm:px-12 lg:flex-row lg:items-start lg:px-20">
+          <div className="flex flex-1 flex-col gap-7">
+            <div className="flex flex-col gap-3">
+              <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-fg-muted">
+                SIGN IN
+              </span>
+              <h1 className="font-display text-[44px] font-semibold leading-tight text-fg-primary sm:text-[52px]">
+                Welcome back.
+              </h1>
+              <p className="text-[15px] leading-relaxed text-fg-secondary">
+                One-tap sign-in via Google or Telegram. We don&apos;t do
+                passwords — your account is keyed by the provider.
+              </p>
+            </div>
 
-              <form
-                onSubmit={onSubmit}
-                className="flex flex-col gap-3.5 px-8 pb-3 pt-2"
-                noValidate
-              >
-                <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden>
-                  <label>
-                    Website
-                    <input
-                      name="website"
-                      tabIndex={-1}
-                      autoComplete="off"
-                      value={website}
-                      onChange={(e) => setWebsite(e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="email"
-                    className="font-mono text-[11px] tracking-[0.08em] text-fg-secondary"
-                  >
-                    Email
-                  </label>
-                  <div className="flex items-center gap-2.5 rounded-lg border border-border-base bg-surface-card-alt px-3.5 py-3 focus-within:border-fg-secondary">
-                    <MailIcon />
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      required
-                      placeholder="you@studio.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="flex-1 bg-transparent text-[14px] text-fg-primary outline-none placeholder:text-fg-muted"
-                    />
-                  </div>
-                </div>
-
-                {state.kind === "error" && (
-                  <p
-                    role="alert"
-                    className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-700"
-                  >
-                    {state.message}
-                  </p>
-                )}
-
+            <div className="flex max-w-[400px] flex-col gap-3">
+              <form action={googleSignIn}>
                 <button
                   type="submit"
-                  disabled={state.kind === "submitting"}
-                  className="mt-1 inline-flex items-center justify-center rounded-full bg-surface-inverse px-5 py-3.5 text-[14px] font-semibold text-fg-inverse transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-3 rounded-full border-[1.5px] border-black bg-surface-card px-5 py-3.5 text-[14px] font-semibold text-fg-primary hover:bg-surface-card-alt"
                 >
-                  {state.kind === "submitting" ? "Sending…" : "Request a sign-in link"}
+                  <GoogleIcon />
+                  Continue with Google
                 </button>
-
-                <p className="text-center font-mono text-[11px] text-fg-muted">
-                  No password. We&apos;ll email you a one-time link.
-                </p>
               </form>
 
-              <footer className="flex items-center justify-center gap-1.5 border-t border-border-base px-8 py-4">
-                <span className="text-[12px] text-fg-muted">
-                  By continuing you agree to the
-                </span>
-                <Link href="/how-it-works" className="text-[12px] font-medium text-fg-primary hover:underline">
-                  log policy
-                </Link>
-              </footer>
-            </Card>
-          )}
-        </Center>
+              {botUsername ? (
+                <TelegramLoginButton
+                  botUsername={botUsername}
+                  callbackUrl={target}
+                />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border-base bg-surface-card-alt px-5 py-4 font-mono text-[11px] text-fg-muted">
+                  Telegram login is unconfigured (TELEGRAM_BOT_USERNAME not set).
+                </div>
+              )}
 
-        <Aside />
+              <p className="font-mono text-[11px] text-fg-muted">
+                By signing in you agree to our{" "}
+                <Link
+                  href="/how-it-works"
+                  className="font-semibold text-fg-secondary underline-offset-4 hover:underline"
+                >
+                  log policy
+                </Link>{" "}
+                — every entry is permanent and visible to your team.
+              </p>
+            </div>
+          </div>
+
+          <aside className="flex w-full max-w-[380px] flex-col gap-3 rounded-2xl border border-border-base bg-surface-card-alt p-6">
+            <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-muted">
+              FIRST TIME?
+            </span>
+            <p className="text-[14px] leading-relaxed text-fg-primary">
+              Signing in with Google or Telegram <strong>creates your
+              account</strong> on the spot. There&apos;s no separate signup
+              step.
+            </p>
+            <p className="text-[13px] leading-relaxed text-fg-secondary">
+              You&apos;ll land on your private dashboard. From there you can
+              add log entries straight away — team flow ships next.
+            </p>
+            <div className="mt-2 border-t border-border-base pt-3 text-[13px] text-fg-secondary">
+              Want to be matched with a cohort?{" "}
+              <Link
+                href="/apply"
+                className="font-semibold text-fg-primary underline-offset-4 hover:underline"
+              >
+                Apply
+              </Link>
+              .
+            </div>
+          </aside>
+        </section>
       </main>
       <Footer />
     </>
   );
 }
 
-function Center({ children }: { children: ReactNode }) {
-  return (
-    <section className="flex justify-center px-6 pb-10 pt-12 sm:px-12 md:px-20">
-      {children}
-    </section>
-  );
+function sanitizeCallback(value: string | undefined): string | null {
+  if (!value) return null;
+  if (!value.startsWith("/")) return null;
+  if (value.startsWith("//")) return null;
+  return value;
 }
 
-function Card({ children }: { children: ReactNode }) {
+function GoogleIcon() {
   return (
-    <div className="w-full max-w-[440px] overflow-hidden rounded-2xl border border-border-base bg-surface-card">
-      {children}
-    </div>
-  );
-}
-
-function Success({ email }: { email: string }) {
-  return (
-    <Card>
-      <div className="flex flex-col items-center gap-4 px-8 py-12 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-[20px] font-semibold text-fg-inverse">
-          ✓
-        </span>
-        <h2 className="font-display text-[24px] font-semibold tracking-[-0.01em] text-fg-primary">
-          Check your email
-        </h2>
-        <p className="max-w-[320px] text-[13px] leading-[1.55] text-fg-secondary">
-          We sent a confirmation to <span className="font-semibold text-fg-primary">{email}</span>.
-          We&apos;ll reply with your sign-in link within 24h.
-        </p>
-        <Link
-          href="/"
-          className="mt-2 font-mono text-[11px] tracking-[0.2em] text-fg-primary hover:underline"
-        >
-          BACK TO THE FEED →
-        </Link>
-      </div>
-    </Card>
-  );
-}
-
-function Aside() {
-  const items = [
-    {
-      h: "Builders & leaders",
-      d: "Sign in to land in your team dashboard, board, calendar, and daily log.",
-    },
-    {
-      h: "Hirers",
-      d: "Sign in to manage unlocked logs, NDA copies, and your saved candidates.",
-    },
-    {
-      h: "No invite yet?",
-      d: "Apply to the next cohort or unlock a single log to read what's already shipped.",
-    },
-  ];
-  return (
-    <section className="px-6 pb-10 sm:px-12 md:px-20">
-      <div className="mx-auto grid max-w-[1200px] gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((it) => (
-          <article
-            key={it.h}
-            className="flex flex-col gap-2 rounded-xl border border-border-base bg-surface-card px-5 py-4"
-          >
-            <h3 className="text-[13px] font-semibold text-fg-primary">{it.h}</h3>
-            <p className="text-[12px] leading-[1.5] text-fg-secondary">{it.d}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function MailIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="#999"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="m3 7 9 6 9-6" />
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.46-.8 5.96-2.18l-2.92-2.26c-.81.54-1.85.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.32A9 9 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3.01-2.32Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.5.45 3.44 1.34l2.58-2.58C13.46.86 11.43 0 9 0A9 9 0 0 0 .96 4.96l3.01 2.32C4.68 5.16 6.66 3.58 9 3.58Z"
+      />
     </svg>
   );
 }

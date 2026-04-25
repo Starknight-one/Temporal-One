@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { EntryType, ArtifactKind, Artifact } from "@/lib/admin-data";
+import type { EntryType, ArtifactKind, Artifact } from "@/lib/types";
 
 export const TYPE_STYLES: Record<EntryType, { bg: string; fg: string; label: string }> = {
   built: { bg: "#FFE0B2", fg: "#E65100", label: "Built" },

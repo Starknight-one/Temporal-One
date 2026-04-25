@@ -7,6 +7,8 @@ import {
   sendEmail,
 } from "@/lib/email";
 import { ipFromRequest, rateLimit } from "@/lib/rate-limit";
+import { db } from "@/lib/db/client";
+import { applications } from "@/lib/db/schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -160,6 +162,31 @@ export async function POST(request: Request) {
   }
 
   const message = buildMessage(parsed);
+
+  try {
+    await db.insert(applications).values(
+      parsed.intent === "build"
+        ? {
+            intent: "build",
+            email: parsed.email,
+            name: parsed.name,
+            linkedinUrl: parsed.linkedin,
+            track: parsed.track,
+            note: parsed.note ?? null,
+            ip,
+          }
+        : {
+            intent: "hire",
+            email: parsed.email,
+            name: parsed.name,
+            company: parsed.company,
+            roles: parsed.roles,
+            ip,
+          },
+    );
+  } catch (err) {
+    console.error("[apply] DB insert failed (continuing to email):", err);
+  }
 
   try {
     const { delivered } = await sendEmail({
