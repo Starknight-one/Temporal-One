@@ -17,7 +17,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     sessionsTable: sessions,
     verificationTokensTable: verificationTokens,
   }),
-  session: { strategy: "database" },
   providers: [
     ...authConfig.providers,
     Credentials({
@@ -105,15 +104,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async session({ session, user }) {
-      if (session.user && user) {
-        session.user.id = user.id;
+    async jwt({ token, user }) {
+      // First sign-in: `user` is set. Persist its DB id on the token so we can
+      // re-hydrate role/handle from Postgres later without touching the DB on
+      // every request.
+      if (user?.id) {
+        token.userId = user.id;
+      }
+      if (token.userId && (!("handle" in token) || token.handle === undefined)) {
         const row = await db.query.users.findFirst({
-          where: (u, { eq }) => eq(u.id, user.id),
+          where: (u, { eq }) => eq(u.id, token.userId as string),
           columns: { handle: true, role: true },
         });
-        session.user.handle = row?.handle ?? null;
-        session.user.role = row?.role ?? "builder";
+        token.handle = row?.handle ?? null;
+        token.role = row?.role ?? "builder";
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user && token) {
+        session.user.id = (token.userId as string) ?? "";
+        session.user.handle = (token.handle as string | null) ?? null;
+        session.user.role =
+          (token.role as "builder" | "hirer" | "admin") ?? "builder";
       }
       return session;
     },

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signIn } from "@/auth";
 import { LandingHeader } from "@/components/LandingHeader";
@@ -36,14 +35,16 @@ export default async function SigninPage({ searchParams }: Params) {
           <div className="flex flex-1 flex-col gap-7">
             <div className="flex flex-col gap-3">
               <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-fg-muted">
-                SIGN IN
+                SIGN UP · SIGN IN
               </span>
               <h1 className="font-display text-[44px] font-semibold leading-tight text-fg-primary sm:text-[52px]">
-                Welcome back.
+                One tap and you&apos;re a builder.
               </h1>
               <p className="text-[15px] leading-relaxed text-fg-secondary">
-                One-tap sign-in via Google or Telegram. We don&apos;t do
-                passwords — your account is keyed by the provider.
+                Google or Telegram both work for new accounts and returning
+                users — same buttons, same flow. We don&apos;t do passwords.
+                You&apos;ll land in your dashboard and can log your first entry
+                right away.
               </p>
             </div>
 
@@ -70,42 +71,11 @@ export default async function SigninPage({ searchParams }: Params) {
               )}
 
               <p className="font-mono text-[11px] text-fg-muted">
-                By signing in you agree to our{" "}
-                <Link
-                  href="/how-it-works"
-                  className="font-semibold text-fg-secondary underline-offset-4 hover:underline"
-                >
-                  log policy
-                </Link>{" "}
-                — every entry is permanent and visible to your team.
+                By continuing you agree that every log entry is permanent and
+                visible to your team.
               </p>
             </div>
           </div>
-
-          <aside className="flex w-full max-w-[380px] flex-col gap-3 rounded-2xl border border-border-base bg-surface-card-alt p-6">
-            <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-fg-muted">
-              FIRST TIME?
-            </span>
-            <p className="text-[14px] leading-relaxed text-fg-primary">
-              Signing in with Google or Telegram <strong>creates your
-              account</strong> on the spot. There&apos;s no separate signup
-              step.
-            </p>
-            <p className="text-[13px] leading-relaxed text-fg-secondary">
-              You&apos;ll land on your private dashboard. From there you can
-              add log entries straight away — team flow ships next.
-            </p>
-            <div className="mt-2 border-t border-border-base pt-3 text-[13px] text-fg-secondary">
-              Want to be matched with a cohort?{" "}
-              <Link
-                href="/apply"
-                className="font-semibold text-fg-primary underline-offset-4 hover:underline"
-              >
-                Apply
-              </Link>
-              .
-            </div>
-          </aside>
         </section>
       </main>
       <Footer />
