@@ -96,9 +96,9 @@ export default async function HomePage({
   const isEmpty = totalProjects === 0 && totalLogs === 0;
 
   return (
-    <div style={{ background: PAGE_BG }} className="min-h-dvh">
+    <>
       <LandingHeader current="feed" />
-      <main>
+      <main style={{ background: PAGE_BG }}>
         <section className="flex flex-col items-center gap-6 px-6 pb-10 pt-12 sm:px-12 md:px-20 md:pt-16">
           <h1 className="text-center font-sans font-semibold leading-[1.05] tracking-[-0.035em] text-fg-primary text-[56px] sm:text-7xl md:text-[84px]">
             Can&apos;t find work?
@@ -193,7 +193,7 @@ export default async function HomePage({
         </section>
       </main>
       <Footer />
-    </div>
+    </>
   );
 }
 
