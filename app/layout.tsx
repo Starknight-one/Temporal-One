@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Anton, Geist_Mono } from "next/font/google";
+import { Inter, Newsreader, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -8,9 +8,8 @@ const inter = Inter({
   display: "swap",
 });
 
-const anton = Anton({
-  variable: "--font-anton",
-  weight: "400",
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
   subsets: ["latin"],
   display: "swap",
 });
@@ -22,13 +21,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Temporal One — Stop applying. Start building.",
+  title: "Temporal One — Proof, not promises.",
   description:
-    "A structured 6-week sprint where unemployed tech professionals build real products with real teams. $20/mo. 15 spots per cohort.",
+    "One month. Five people. A verified work log nobody can fake. Builders ship a real product; hirers read the actual evidence.",
   openGraph: {
-    title: "Temporal One — Stop applying. Start building.",
+    title: "Temporal One — Proof, not promises.",
     description:
-      "A structured 6-week sprint where unemployed tech professionals build real products with real teams.",
+      "One month. Five people. A verified work log nobody can fake.",
     type: "website",
   },
 };
@@ -41,7 +40,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${anton.variable} ${geistMono.variable}`}
+      className={`${inter.variable} ${newsreader.variable} ${geistMono.variable}`}
     >
       <body>{children}</body>
     </html>
