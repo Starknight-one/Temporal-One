@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { LandingHeader } from "@/components/LandingHeader";
 import { Footer } from "@/components/Footer";
+import { PROJECTS as DATA_PROJECTS } from "@/lib/data";
 
 type Tab = "projects" | "log";
 
@@ -236,7 +237,8 @@ function FilterChip({
 
 /* -------------------------- Projects grid -------------------------- */
 
-type Project = {
+type ProjectCardData = {
+  slug: string;
   initials: string;
   bg: string;
   fg: string;
@@ -248,132 +250,35 @@ type Project = {
   rating: string;
 };
 
-const PROJECTS: Project[] = [
-  {
-    initials: "HM",
-    bg: "#FFE0B2",
-    fg: "#FF9800",
-    name: "HireMatch AI",
-    desc: "AI matching for engineers tired of 200-app voids.",
-    badge: { text: "HIRING", tone: "filled" },
-    day: "Day 11",
-    logs: "54 logs",
-    rating: "4.8 ★",
-  },
-  {
-    initials: "TP",
-    bg: "#E1BEE7",
-    fg: "#7B1FA2",
-    name: "TeamPulse",
-    desc: "Async standups + pulse checks for remote teams.",
-    badge: { text: "HIRING", tone: "filled" },
-    day: "Day 9",
-    logs: "41 logs",
-    rating: "4.6 ★",
-  },
-  {
-    initials: "SS",
-    bg: "#C8E6C9",
-    fg: "#2E7D32",
-    name: "SkillStack",
-    desc: "Bite-sized skill paths for laid-off mid-career devs.",
-    badge: { text: "LEAD?", tone: "outline" },
-    day: "Day 6",
-    logs: "28 logs",
-    rating: "4.4 ★",
-  },
-  {
-    initials: "DR",
-    bg: "#FFCDD2",
-    fg: "#C62828",
-    name: "DealRoom",
-    desc: "Async deal review for early-stage VCs. Live users.",
-    badge: { text: "LAUNCH", tone: "outline" },
-    day: "Day 22",
-    logs: "77 logs",
-    rating: "4.7 ★",
-  },
-  {
-    initials: "??",
-    bg: "#BBDEFB",
-    fg: "#1565C0",
-    name: "Team #42",
-    desc: "Anonymous · B2B SaaS · idea private until launch.",
-    badge: { text: "STEALTH", tone: "outline" },
-    day: "Day 4",
-    logs: "19 logs",
-    rating: "4.5 ★",
-  },
-  {
-    initials: "QH",
-    bg: "#E1BEE7",
-    fg: "#6A1B9A",
-    name: "QuietHire",
-    desc: "Hiring without LinkedIn theatre. Match by logs.",
-    badge: { text: "HIRING", tone: "filled" },
-    day: "Day 14",
-    logs: "63 logs",
-    rating: "4.9 ★",
-  },
-  {
-    initials: "BR",
-    bg: "#FFCDD2",
-    fg: "#C62828",
-    name: "BurnRate",
-    desc: "Live runway calc + hiring spend warnings.",
-    badge: { text: "BETA", tone: "filled" },
-    day: "Day 8",
-    logs: "34 logs",
-    rating: "4.5 ★",
-  },
-  {
-    initials: "PP",
-    bg: "#BBDEFB",
-    fg: "#1565C0",
-    name: "PortPilot",
-    desc: "Auto-build portfolios from your verified log.",
-    badge: { text: "LEAD?", tone: "outline" },
-    day: "Day 12",
-    logs: "47 logs",
-    rating: "4.7 ★",
-  },
-  {
-    initials: "PO",
-    bg: "#C8E6C9",
-    fg: "#2E7D32",
-    name: "PromptOps",
-    desc: "Shared prompt library with attribution + scores.",
-    badge: { text: "LAUNCH", tone: "outline" },
-    day: "Day 17",
-    logs: "58 logs",
-    rating: "4.6 ★",
-  },
-  {
-    initials: "C7",
-    bg: "#FFE0B2",
-    fg: "#FF9800",
-    name: "Crew7",
-    desc: "Find a 5-person team in 72h. Skill-matched.",
-    badge: { text: "OPEN", tone: "filled" },
-    day: "Day 3",
-    logs: "15 logs",
-    rating: "4.3 ★",
-  },
-];
+const PROJECTS: ProjectCardData[] = DATA_PROJECTS.map((p) => ({
+  slug: p.slug,
+  initials: p.initials,
+  bg: p.bg,
+  fg: p.fg,
+  name: p.name,
+  desc: p.shortDesc,
+  badge: p.badge,
+  day: `Day ${p.status.daysIn}`,
+  logs: `${p.entries} logs`,
+  rating: p.rating,
+}));
 
 function ProjectGrid() {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       {PROJECTS.map((p) => (
-        <ProjectCard key={p.name} p={p} />
+        <ProjectCard key={p.slug} p={p} />
       ))}
     </div>
   );
 }
 
-function ProjectCard({ p }: { p: Project }) {
+function ProjectCard({ p }: { p: ProjectCardData }) {
   return (
-    <article className="flex flex-col gap-2.5 rounded-[10px] border border-border-base bg-surface-card-alt p-3.5">
+    <Link
+      href={`/projects/${p.slug}`}
+      className="flex flex-col gap-2.5 rounded-[10px] border border-border-base bg-surface-card-alt p-3.5 transition-colors hover:bg-surface-card hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+    >
       <header className="flex items-center justify-between">
         <span
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg font-mono text-[11px] font-semibold"
@@ -402,7 +307,7 @@ function ProjectCard({ p }: { p: Project }) {
         <span>{p.logs}</span>
         <span className="font-semibold text-accent">{p.rating}</span>
       </div>
-    </article>
+    </Link>
   );
 }
 
@@ -412,7 +317,9 @@ type LogEntry = {
   time: string;
   type: "code" | "call" | "design" | "doc" | "data";
   team: string;
+  teamSlug?: string;
   who: string;
+  whoHandle?: string;
   did: string;
   meta: string;
 };
@@ -429,16 +336,16 @@ const TYPE_COLORS: Record<
 };
 
 const LOG_ENTRIES: LogEntry[] = [
-  { time: "2m", type: "code", team: "HireMatch AI", who: "Sasha K.", did: "pushed 13 commits — match scoring v2 endpoint", meta: "3h · PR #142" },
-  { time: "5m", type: "call", team: "TeamPulse", who: "Aya S.", did: "finished 5 user interviews — async standup pain validated", meta: "4h · 5 transcripts" },
-  { time: "12m", type: "design", team: "HireMatch AI", who: "Liza P.", did: "shipped 4 new screens — onboarding, profile, match, settings", meta: "5h · Figma" },
-  { time: "21m", type: "doc", team: "DealRoom", who: "David J.", did: "drafted dashboard wireframe — pipeline view, deal stages", meta: "2h · Excalidraw" },
-  { time: "38m", type: "data", team: "TeamPulse", who: "Marcus R.", did: "migrated DB to Postgres — auth + sessions tables live", meta: "6h · commit a4f81" },
-  { time: "54m", type: "code", team: "SkillStack", who: "Kat M.", did: "validated SkillStack idea with 30 survey responses", meta: "3h · 30 responses" },
-  { time: "1h", type: "call", team: "NoteFlow", who: "Ryan W.", did: "posted spec doc — sync engine v1, conflict resolution", meta: "4h · Notion" },
-  { time: "1h", type: "design", team: "DealRoom", who: "Anya R.", did: "peer-reviewed teammate's PR — 2 blockers raised, 1 resolved", meta: "45m · review" },
-  { time: "2h", type: "doc", team: "Team #42", who: "Anonymous", did: "sent 18 cold emails — 3 demo bookings on the calendar", meta: "2h · external" },
-  { time: "3h", type: "data", team: "HireMatch AI", who: "Mira P.", did: "deployed v0.4 to staging — embedding cache hit rate 94%", meta: "5h · deploy log" },
+  { time: "2m", type: "code", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Sasha K.", whoHandle: "sasha-k", did: "pushed 13 commits — match scoring v2 endpoint", meta: "3h · PR #142" },
+  { time: "5m", type: "call", team: "TeamPulse", teamSlug: "teampulse", who: "Aya S.", whoHandle: "aya-s", did: "finished 5 user interviews — async standup pain validated", meta: "4h · 5 transcripts" },
+  { time: "12m", type: "design", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Lila P.", whoHandle: "lila-p", did: "shipped 4 new screens — onboarding, profile, match, settings", meta: "5h · Figma" },
+  { time: "21m", type: "doc", team: "DealRoom", teamSlug: "dealroom", who: "Sasha K.", whoHandle: "sasha-k", did: "drafted dashboard wireframe — pipeline view, deal stages", meta: "2h · Excalidraw" },
+  { time: "38m", type: "data", team: "TeamPulse", teamSlug: "teampulse", who: "Marcus R.", whoHandle: "marcus-r", did: "migrated DB to Postgres — auth + sessions tables live", meta: "6h · commit a4f81" },
+  { time: "54m", type: "code", team: "SkillStack", teamSlug: "skillstack", who: "Lila P.", whoHandle: "lila-p", did: "validated SkillStack idea with 30 survey responses", meta: "3h · 30 responses" },
+  { time: "1h", type: "call", team: "QuietHire", teamSlug: "quiethire", who: "Dima J.", whoHandle: "dima-j", did: "posted spec doc — sync engine v1, conflict resolution", meta: "4h · Notion" },
+  { time: "1h", type: "design", team: "DealRoom", teamSlug: "dealroom", who: "Marcus R.", whoHandle: "marcus-r", did: "peer-reviewed teammate's PR — 2 blockers raised, 1 resolved", meta: "45m · review" },
+  { time: "2h", type: "doc", team: "Team #42", teamSlug: "team-42", who: "Anonymous", did: "sent 18 cold emails — 3 demo bookings on the calendar", meta: "2h · external" },
+  { time: "3h", type: "data", team: "HireMatch AI", teamSlug: "hirematch-ai", who: "Aya S.", whoHandle: "aya-s", did: "deployed v0.4 to staging — embedding cache hit rate 94%", meta: "5h · deploy log" },
 ];
 
 function ActivityLog() {
@@ -468,12 +375,30 @@ function LogRow({ entry: e, last }: { entry: LogEntry; last: boolean }) {
       >
         {c.icon}
       </span>
-      <span className="hidden w-[140px] flex-none truncate font-sans text-[13px] font-semibold text-fg-primary md:block">
-        {e.team}
-      </span>
-      <span className="hidden w-[100px] flex-none truncate text-[13px] text-fg-secondary md:block">
-        {e.who}
-      </span>
+      {e.teamSlug ? (
+        <Link
+          href={`/projects/${e.teamSlug}`}
+          className="hidden w-[140px] flex-none truncate font-sans text-[13px] font-semibold text-fg-primary hover:underline md:block"
+        >
+          {e.team}
+        </Link>
+      ) : (
+        <span className="hidden w-[140px] flex-none truncate font-sans text-[13px] font-semibold text-fg-primary md:block">
+          {e.team}
+        </span>
+      )}
+      {e.whoHandle ? (
+        <Link
+          href={`/u/${e.whoHandle}`}
+          className="hidden w-[100px] flex-none truncate text-[13px] text-fg-secondary hover:text-fg-primary md:block"
+        >
+          {e.who}
+        </Link>
+      ) : (
+        <span className="hidden w-[100px] flex-none truncate text-[13px] text-fg-secondary md:block">
+          {e.who}
+        </span>
+      )}
       <span className="flex-1 truncate text-[13px] text-fg-primary">
         {e.did}
       </span>

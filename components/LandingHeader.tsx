@@ -3,8 +3,8 @@ import Link from "next/link";
 type NavKey = "feed" | "how" | "hirers" | "signin";
 
 const NAV: { key: NavKey; label: string; href: string }[] = [
-  { key: "feed", label: "Feed", href: "/cohort" },
-  { key: "how", label: "How it works", href: "/" },
+  { key: "feed", label: "Feed", href: "/" },
+  { key: "how", label: "How it works", href: "/how-it-works" },
   { key: "hirers", label: "For hirers", href: "/for-hirers" },
   { key: "signin", label: "Sign in", href: "/signin" },
 ];
