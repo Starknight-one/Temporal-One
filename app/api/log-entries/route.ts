@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db/client";
-import { logEntries } from "@/lib/db/schema";
+import { logEntries, teamMembers } from "@/lib/db/schema";
 import { parseGithubPrUrl } from "@/lib/github";
 import { rateLimit, ipFromRequest } from "@/lib/rate-limit";
 
@@ -19,6 +20,7 @@ const BodySchema = z.object({
   timeSpent: z.number().min(0.5).max(24),
   artifactUrl: z.string().url().optional().or(z.literal("")),
   note: z.string().max(2000).optional().or(z.literal("")),
+  teamId: z.string().uuid().optional().or(z.literal("")),
 });
 
 export async function POST(req: Request) {
@@ -55,10 +57,28 @@ export async function POST(req: Request) {
   const pr = parseGithubPrUrl(url);
   const lockedAt = new Date(Date.now() + 60 * 60 * 1000);
 
+  const teamId = parsed.data.teamId?.trim() || null;
+  if (teamId) {
+    const member = await db
+      .select({ teamId: teamMembers.teamId })
+      .from(teamMembers)
+      .where(
+        and(
+          eq(teamMembers.teamId, teamId),
+          eq(teamMembers.userId, session.user.id),
+        ),
+      )
+      .limit(1);
+    if (member.length === 0) {
+      return NextResponse.json({ error: "not_team_member" }, { status: 403 });
+    }
+  }
+
   const [row] = await db
     .insert(logEntries)
     .values({
       userId: session.user.id,
+      teamId,
       title: parsed.data.title.trim(),
       type: parsed.data.type,
       timeSpent: parsed.data.timeSpent.toFixed(1),

@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 type Item = { href: string; label: string; icon?: ReactNode };
 
 const ITEMS: Item[] = [
+  { href: "/app/board", label: "Board" },
   { href: "/app/today", label: "Today" },
   { href: "/app/team", label: "Team" },
   { href: "/app/playbook", label: "Playbook" },
@@ -86,15 +87,9 @@ export function BuilderTopNav({
 
       <div className="ml-2 flex items-center gap-3">
         <Link
-          href="/api/auth/signout"
-          className="hidden font-mono text-[11px] tracking-[0.1em] text-fg-secondary hover:text-fg-primary sm:inline-block"
-        >
-          sign out
-        </Link>
-        <span className="h-5 w-px bg-border-base" />
-        <span
-          className="inline-flex items-center gap-2 rounded-full border border-border-base bg-surface-card py-[3px] pl-3 pr-[3px]"
+          href="/app/account"
           aria-label="Account"
+          className="inline-flex items-center gap-2 rounded-full border border-border-base bg-surface-card py-[3px] pl-3 pr-[3px] hover:bg-surface-card-alt"
         >
           <span className="font-mono text-[11px] font-semibold text-fg-primary">
             {initials}
@@ -110,7 +105,7 @@ export function BuilderTopNav({
           ) : (
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent" />
           )}
-        </span>
+        </Link>
       </div>
     </header>
   );

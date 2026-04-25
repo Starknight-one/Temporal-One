@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { logEntries, type LogEntryRow } from "@/lib/db/schema";
 import { ArtifactPreview, TypePill } from "@/components/admin/shared";
 import { AddLogEntryButton } from "@/components/admin/AddLogEntryModal";
+import { getUserTeams } from "@/lib/teams";
 import type { ArtifactKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,8 @@ export default async function TodayPage() {
     .where(eq(logEntries.userId, session.user.id))
     .orderBy(desc(logEntries.postedAt))
     .limit(50);
+
+  const myTeams = await getUserTeams(session.user.id);
 
   const totalHours = entries.reduce(
     (sum, e) => sum + Number(e.timeSpent ?? 0),
@@ -46,7 +49,9 @@ export default async function TodayPage() {
         todayHours={todayHours}
       />
 
-      <AddLogEntryButton />
+      <AddLogEntryButton
+        teams={myTeams.map((t) => ({ id: t.id, slug: t.slug, name: t.name }))}
+      />
 
       <section className="flex flex-col gap-3.5">
         <SectionHeader

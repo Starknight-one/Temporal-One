@@ -14,6 +14,13 @@ import type { AdapterAccountType } from "next-auth/adapters";
 
 export const userRoleEnum = pgEnum("user_role", ["builder", "hirer", "admin"]);
 
+export const teamStatusEnum = pgEnum("team_status", [
+  "open",
+  "running",
+  "shipped",
+  "abandoned",
+]);
+
 export const entryTypeEnum = pgEnum("entry_type", [
   "built",
   "fixed",
@@ -44,6 +51,7 @@ export const users = pgTable(
     handle: text("handle").unique(),
     role: userRoleEnum("role").notNull().default("builder"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { mode: "date" }),
   },
   (t) => [uniqueIndex("users_handle_idx").on(t.handle)],
 );
@@ -93,6 +101,9 @@ export const logEntries = pgTable("log_entries", {
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").references(() => teams.id, {
+    onDelete: "set null",
+  }),
   title: text("title").notNull(),
   type: entryTypeEnum("type").notNull(),
   timeSpent: numeric("time_spent", { precision: 4, scale: 1 }).notNull(),
@@ -137,9 +148,17 @@ export const teams = pgTable("teams", {
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
   projectName: text("project_name"),
+  description: text("description"),
+  category: text("category"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  status: teamStatusEnum("status").notNull().default("open"),
+  maxMembers: integer("max_members").notNull().default(5),
   cohortNumber: integer("cohort_number"),
   startedAt: timestamp("started_at", { mode: "date" }),
   totalDays: integer("total_days").notNull().default(30),
+  createdBy: uuid("created_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
@@ -193,3 +212,6 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type LogEntryRow = typeof logEntries.$inferSelect;
 export type NewLogEntry = typeof logEntries.$inferInsert;
+export type Team = typeof teams.$inferSelect;
+export type NewTeam = typeof teams.$inferInsert;
+export type TeamMember = typeof teamMembers.$inferSelect;

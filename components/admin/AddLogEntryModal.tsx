@@ -13,12 +13,20 @@ const TYPE_LABELS: Record<EntryType, string> = {
   blocked: "Blocked",
 };
 
+export type LogEntryTeamOption = { id: string; slug: string; name: string };
+
 export function AddLogEntryButton({
   className,
   children,
+  teams = [],
+  initialTeamId,
+  lockTeam = false,
 }: {
   className?: string;
   children?: React.ReactNode;
+  teams?: LogEntryTeamOption[];
+  initialTeamId?: string;
+  lockTeam?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -38,12 +46,29 @@ export function AddLogEntryButton({
           </>
         )}
       </button>
-      {open && <AddLogEntryModal onClose={() => setOpen(false)} />}
+      {open && (
+        <AddLogEntryModal
+          teams={teams}
+          initialTeamId={initialTeamId}
+          lockTeam={lockTeam}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
 
-function AddLogEntryModal({ onClose }: { onClose: () => void }) {
+function AddLogEntryModal({
+  onClose,
+  teams,
+  initialTeamId,
+  lockTeam,
+}: {
+  onClose: () => void;
+  teams: LogEntryTeamOption[];
+  initialTeamId?: string;
+  lockTeam: boolean;
+}) {
   const titleId = useId();
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -52,6 +77,9 @@ function AddLogEntryModal({ onClose }: { onClose: () => void }) {
   const [hours, setHours] = useState(3);
   const [showNote, setShowNote] = useState(false);
   const [note, setNote] = useState("");
+  const [teamId, setTeamId] = useState<string>(
+    initialTeamId ?? teams[0]?.id ?? "",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +118,7 @@ function AddLogEntryModal({ onClose }: { onClose: () => void }) {
           timeSpent: hours,
           artifactUrl: artifactUrl.trim() || undefined,
           note: note.trim() || undefined,
+          teamId: teamId || undefined,
         }),
       });
       if (!res.ok) {
@@ -134,6 +163,34 @@ function AddLogEntryModal({ onClose }: { onClose: () => void }) {
         </header>
 
         <div className="flex flex-col gap-5 px-[22px] py-[22px]">
+          {teams.length > 0 && (
+            <Field label="Project">
+              {lockTeam && teams.length === 1 ? (
+                <span className="inline-flex items-center gap-2 rounded-md border border-border-base bg-surface-card-alt px-3 py-2 text-[13px] font-medium text-fg-primary">
+                  <span className="inline-block h-2 w-2 rounded-full bg-accent" />
+                  {teams[0].name}
+                </span>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {teams.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setTeamId(t.id)}
+                      disabled={submitting}
+                      className={`rounded-md border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                        teamId === t.id
+                          ? "border-accent bg-[#FFF3E0] text-accent"
+                          : "border-border-base bg-surface-card text-fg-secondary hover:text-fg-primary"
+                      }`}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Field>
+          )}
           <Field label="What did you do?">
             <input
               autoFocus

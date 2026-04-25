@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { authConfig } from "./auth.config";
 import { db } from "@/lib/db/client";
@@ -119,6 +119,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // every request.
       if (user?.id) {
         token.userId = user.id;
+        // Restore a soft-deleted account on fresh sign-in.
+        await db
+          .update(users)
+          .set({ deletedAt: null })
+          .where(and(eq(users.id, user.id), isNotNull(users.deletedAt)));
       }
       if (token.userId && (!("handle" in token) || token.handle === undefined)) {
         const row = await db.query.users.findFirst({
