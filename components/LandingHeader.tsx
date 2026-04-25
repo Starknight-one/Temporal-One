@@ -1,6 +1,13 @@
 import Link from "next/link";
 
-type NavKey = "feed" | "signin";
+type NavKey = "feed" | "how" | "hirers" | "signin";
+
+const NAV: { key: NavKey; label: string; href: string }[] = [
+  { key: "feed", label: "Feed", href: "/" },
+  { key: "how", label: "How it works", href: "/how-it-works" },
+  { key: "hirers", label: "For hirers", href: "/for-hirers" },
+  { key: "signin", label: "Sign in", href: "/signin" },
+];
 
 export function LandingHeader({ current }: { current?: NavKey }) {
   return (
@@ -12,15 +19,31 @@ export function LandingHeader({ current }: { current?: NavKey }) {
         >
           Temporal One
         </Link>
+
+        <nav className="hidden items-center gap-6 sm:flex">
+          {NAV.map((item) => {
+            const active = current === item.key;
+            return (
+              <Link
+                key={item.key}
+                href={item.href}
+                className={`font-mono text-[12px] transition-colors hover:text-fg-primary ${
+                  active
+                    ? "font-semibold text-fg-primary"
+                    : "text-fg-secondary"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
         <Link
           href="/signin"
-          className={`inline-flex items-center justify-center rounded-full px-[18px] py-[10px] text-[13px] font-semibold transition-colors ${
-            current === "signin"
-              ? "bg-surface-card-alt text-fg-primary"
-              : "bg-accent text-fg-inverse hover:bg-accent-hover"
-          }`}
+          className="inline-flex items-center justify-center rounded-full bg-accent px-[18px] py-[10px] text-[13px] font-semibold text-fg-inverse transition-colors hover:bg-accent-hover"
         >
-          Sign in · sign up
+          Sign up · sign in
         </Link>
       </div>
     </header>

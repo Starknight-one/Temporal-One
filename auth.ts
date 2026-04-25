@@ -38,8 +38,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.error("TELEGRAM_BOT_TOKEN is not set");
           return null;
         }
+        console.log(
+          "[telegram] authorize payload keys:",
+          Object.keys(payload).join(","),
+        );
         if (!verifyTelegramHash(payload, token)) {
-          console.warn("Telegram hash check failed");
+          console.warn(
+            "[telegram] hash mismatch · received hash=" +
+              (payload.hash ?? "null") +
+              " · keys=" +
+              Object.keys(payload).join(","),
+          );
           return null;
         }
         const authDate = Number(payload.auth_date);
@@ -142,21 +151,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 });
 
+// Telegram-only fields, sorted alphabetically. Anything else (csrfToken,
+// callbackUrl, etc. that Auth.js may inject into the credentials payload) is
+// excluded — they're not part of Telegram's hash and would break verification.
+const TG_HASH_FIELDS = [
+  "auth_date",
+  "first_name",
+  "id",
+  "last_name",
+  "photo_url",
+  "username",
+] as const;
+
 function verifyTelegramHash(
   payload: Record<string, string | undefined>,
   token: string,
 ): boolean {
-  const { hash, ...rest } = payload;
+  const hash = payload.hash;
   if (!hash) return false;
-  const dataCheckString = Object.keys(rest)
-    .filter((k) => rest[k] !== undefined && rest[k] !== "")
-    .sort()
-    .map((k) => `${k}=${rest[k]}`)
+  const dataCheckString = TG_HASH_FIELDS.filter(
+    (k) => payload[k] !== undefined && payload[k] !== "",
+  )
+    .map((k) => `${k}=${payload[k]}`)
     .join("\n");
   const secretKey = createHash("sha256").update(token).digest();
   const computed = createHmac("sha256", secretKey)
     .update(dataCheckString)
     .digest("hex");
+  console.log(
+    "[telegram] dataCheckString:",
+    dataCheckString.replace(/\n/g, " | "),
+    "· computed=" + computed.slice(0, 12) + "..",
+    "· received=" + hash.slice(0, 12) + "..",
+  );
   if (computed.length !== hash.length) return false;
   try {
     return timingSafeEqual(Buffer.from(computed), Buffer.from(hash));
